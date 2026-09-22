@@ -65,7 +65,11 @@ def start(m):
     p = get_player(m.from_user.id, m.from_user.first_name or "Игрок")
     regen_energy(p)
     save_player(p)
-    bot.send_message(m.chat.id, menu_text(p), reply_markup=main_menu(), parse_mode="Markdown")
+    try:
+    bot.delete_message(m.chat.id, m.message_id)
+except:
+    pass
+bot.send_message(m.chat.id, menu_text(p), reply_markup=main_menu(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda c: c.data == "menu")
 def back_menu(c):
