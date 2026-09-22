@@ -59,17 +59,6 @@ def try_equip_if_better(p, key):
         return True
     return False
 
-def format_drops(drops, is_gem=False):
-    """Форматирует список дропов: (key, amt, exp)"""
-    lines = []
-    total_exp = 0
-    for key, amt, exp in drops:
-        tier = GEM_TIER.get(key, "?") if is_gem else ORE_TIER.get(key, "?")
-        name = GEMS[key]["name"] if is_gem else ORES[key]["name"]
-        lines.append(f"{name} ({tier}) × {amt}")
-        total_exp += exp
-    return "\n".join(lines), total_exp
-
 LINE = "━━━━━━━━━━━━━━━━━━"
 
 def main_menu():
@@ -366,18 +355,33 @@ def dig(c):
     gem_drops = []
     if random.randint(1, 100) <= 30:
         gem_drops = roll_gem_drop(p["prof_miner"])
+
+    # Объединяем дубликаты
+    merged = {}
+    for key, amt, exp in ore_drops:
+        if key not in merged:
+            merged[key] = {"amt": 0, "exp": 0, "is_gem": False}
+        merged[key]["amt"] += amt
+        merged[key]["exp"] += exp
+    for key, amt, exp in gem_drops:
+        if key not in merged:
+            merged[key] = {"amt": 0, "exp": 0, "is_gem": True}
+        merged[key]["amt"] += amt
+        merged[key]["exp"] += exp
+
     text_lines = ["⛏ *ДОБЫЧА*", ""]
     total_exp = 0
-    for key, amt, exp in ore_drops:
-        tier = ORE_TIER.get(key, "?")
-        text_lines.append(f"{ORES[key]['name']} ({tier}) × {amt}")
-        p[key] = (p.get(key, 0) or 0) + amt
-        total_exp += exp
-    for key, amt, exp in gem_drops:
-        tier = GEM_TIER.get(key, "?")
-        text_lines.append(f"{GEMS[key]['name']} ({tier}) × {amt}")
-        p[key] = (p.get(key, 0) or 0) + amt
-        total_exp += exp
+    for key, data in merged.items():
+        if data["is_gem"]:
+            tier = GEM_TIER.get(key, "?")
+            name = GEMS[key]["name"]
+        else:
+            tier = ORE_TIER.get(key, "?")
+            name = ORES[key]["name"]
+        text_lines.append(f"{name} ({tier}) × {data['amt']}")
+        p[key] = (p.get(key, 0) or 0) + data["amt"]
+        total_exp += data["exp"]
+
     p["exp_miner"] = (p.get("exp_miner", 0) or 0) + total_exp
     new_lvl = prof_level_for_exp(int(p["exp_miner"]))
     level_up = False
@@ -387,7 +391,7 @@ def dig(c):
     p["mine_count"] += 1
     save_player(p)
     text_lines.append("")
-    text_lines.append(f"📈 +{total_exp} опыта шахтёра")
+    text_lines.append(f"📈 +{total_exp} опыта")
     text_lines.append(f"⚡ Осталось: {p['energy']}")
     if level_up:
         text_lines.append(f"\n🎉 *Шахтёр → ур. {new_lvl}!*")
@@ -410,7 +414,9 @@ def process_auto_mine(p):
     cycles = min(elapsed // 5, 8640)
     for _ in range(cycles):
         for key, amt, exp in roll_ore_drop(p["prof_miner"]):
-            p[key] = (p.get(key, 0) or 0) + amt
+            field = f"auto_mine_{key}" if key in ("copper","iron","gold","mithril","gem") else key
+            if field in p:
+                p[field] = (p.get(field, 0) or 0) + amt
         if random.randint(1, 100) <= 30:
             for key, amt, exp in roll_gem_drop(p["prof_miner"]):
                 p[key] = (p.get(key, 0) or 0) + amt
@@ -421,7 +427,6 @@ def auto_mine_active_markup():
     m.add(
         types.InlineKeyboardButton("🔄 Проверить", callback_data="auto_mine_check"),
         types.InlineKeyboardButton("💰 Забрать", callback_data="auto_mine_collect"),
-        types.InlineKeyboardButton("❌ Отменить", callback_data="auto_mine_stop"),
     )
     return m
 
@@ -501,16 +506,17 @@ def auto_mine_check(c):
     except: pass
     bot.answer_callback_query(c.id, "🔄")
 
-@bot.callback_query_handler(func=lambda c: c.data in ("auto_mine_collect", "auto_mine_stop"))
-def auto_mine_finish(c):
+@bot.callback_query_handler(func=lambda c: c.data == "auto_mine_collect")
+def auto_mine_collect(c):
     p = get_player(c.from_user.id)
     process_auto_mine(p)
     p["auto_mine_active"] = 0
     p["auto_mine_started"] = 0
     p["auto_mine_last_collect"] = 0
+    for key in list(ORES.keys()) + list(GEMS.keys()):
+        p[key] = 0
     save_player(p)
-    msg = "💰 Забрано!" if c.data == "auto_mine_collect" else "❌ Остановлено."
-    bot.answer_callback_query(c.id, msg)
+    bot.answer_callback_query(c.id, "💰 Забрано!")
     auto_mine_menu(c)
 
 # ИНВЕНТАРЬ
@@ -652,83 +658,4 @@ def craft_menu(c):
     except: pass
     bot.answer_callback_query(c.id)
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("craft_") and c.data.count("_") == 1)
-def craft_category(c):
-    prof = c.data.replace("craft_", "")
-    p = get_player(c.from_user.id)
-    text = f"🔨 *{PROFESSIONS[prof]}*\n{LINE}\nВыбери рецепт:"
-    m = types.InlineKeyboardMarkup(row_width=1)
-    for key, r in RECIPES.items():
-        if r["prof"] != prof: continue
-        can, _ = can_craft(p, key)
-        mark = "✅" if can else "🔒"
-        m.add(types.InlineKeyboardButton(f"{mark} {r['name']} (ур.{r['level']})",
-                                          callback_data=f"recipe_{key}"))
-    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="craft"))
-    try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
-    except: pass
-    bot.answer_callback_query(c.id)
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("recipe_"))
-def recipe_view(c):
-    key = c.data.replace("recipe_", "")
-    p = get_player(c.from_user.id)
-    r = RECIPES.get(key)
-    if not r:
-        bot.answer_callback_query(c.id, "❌ Нет рецепта"); return
-    prof = r["prof"]
-    lines = [f"🔨 *{r['name']}*", LINE,
-             f"Профессия: {PROFESSIONS[prof]}",
-             f"Уровень: {r['level']} (у тебя {p[f'prof_{prof}']})", ""]
-    if "ore" in r:
-        lines.append("🪨 *Ресурсы:*")
-        for res, amt in r["ore"].items():
-            have = p.get(res, 0)
-            mark = "✅" if have >= amt else "❌"
-            name = ORES.get(res, {}).get("name") or GEMS.get(res, {}).get("name", res)
-            lines.append(f"  {mark} {name}: {have}/{amt}")
-    if "herb" in r:
-        lines.append("🌿 *Травы:*")
-        for res, amt in r["herb"].items():
-            have = p.get(res, 0)
-            mark = "✅" if have >= amt else "❌"
-            name = HERBS.get(res, {}).get("name", res)
-            lines.append(f"  {mark} {name}: {have}/{amt}")
-    can, msg = can_craft(p, key)
-    lines.append("")
-    lines.append(LINE)
-    lines.append("✅ Можно крафтить!" if can else f"🔒 {msg}")
-    text = "\n".join(lines)
-    m = types.InlineKeyboardMarkup(row_width=1)
-    if can:
-        m.add(types.InlineKeyboardButton("🔨 Скрафтить", callback_data=f"make_{key}"))
-    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data=f"craft_{prof}"))
-    try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
-    except: pass
-    bot.answer_callback_query(c.id)
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("make_"))
-def make_item(c):
-    key = c.data.replace("make_", "")
-    p = get_player(c.from_user.id)
-    ok, msg = do_craft(p, key)
-    if ok:
-        equipped = try_equip_if_better(p, key)
-        if equipped: msg += "\n🔥 Автонадето!"
-    save_player(p)
-    bot.answer_callback_query(c.id, msg[:200])
-    r = RECIPES.get(key)
-    if r:
-        c.data = f"craft_{r['prof']}"
-        craft_category(c)
-
-def run_flask():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
-if __name__ == "__main__":
-    init_db()
-    threading.Thread(target=run_flask, daemon=True).start()
-    print("RPG бот запущен...")
-    bot.infinity_polling()
+@bot.callback_query_handler(func=lambda c: c.data.startswith
