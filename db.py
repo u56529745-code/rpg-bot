@@ -19,7 +19,6 @@ LOOT_LIST = ["wolf_fang", "spider_web", "scorpion_sting", "bear_claw",
              "sky_feather", "shadow_claw", "mini_dragon_scale", "poison_sting",
              "mushroom_skull", "chameleon_slime", "lava_heart", "ghost_raven_feather"]
 
-# Поля auto_mine_* для авто-шахты
 AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
 
 FIELDS = (
@@ -94,6 +93,7 @@ def init_db():
     for col, definition in migrations:
         try:
             c.execute(f"ALTER TABLE players ADD COLUMN {col} {definition}")
+            conn.commit()
         except:
             conn.rollback()
             continue
@@ -111,14 +111,38 @@ def get_player(uid, name="Игрок"):
         conn.commit()
         c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
         row = c.fetchone()
+
+    # Берём РЕАЛЬНЫЕ имена колонок из БД
+    cols = [desc[0] for desc in c.description]
     conn.close()
-    return dict(zip(FIELDS, row))
+    result = dict(zip(cols, row))
+
+    # Дозаполняем отсутствующие поля значениями по умолчанию
+    defaults = {
+        "name": "Игрок", "level": 1, "exp": 0, "hp": 100, "max_hp": 100,
+        "silver": 150, "floor": 1, "mob_kill": 0, "keys": 0,
+        "strength": 0, "agility": 0, "vitality": 0, "stat_points": 0,
+        "weapon": "fists", "armor": "none", "accessory": "none",
+        "prof_smith": 1, "prof_armorer": 1, "prof_jeweler": 1,
+        "prof_alchemist": 1, "prof_miner": 1,
+        "exp_smith": 0, "exp_armorer": 0, "exp_jeweler": 0,
+        "exp_alchemist": 0, "exp_miner": 0,
+        "energy": 250, "max_energy": 250, "last_energy_time": 0,
+        "hp_small": 0, "hp_big": 0, "str_potion": 0, "def_potion": 0,
+        "kills": 0, "mine_count": 0, "boss_kills": 0,
+        "crafted_items": "[]",
+        "auto_mine_active": 0, "auto_mine_started": 0, "auto_mine_last_collect": 0,
+    }
+    for f in FIELDS:
+        if f not in result:
+            result[f] = defaults.get(f, 0)
+    return result
 
 def save_player(p):
     conn = get_conn()
     c = conn.cursor()
     placeholders = ", ".join(f"{f}=%s" for f in FIELDS if f != "uid")
-    values = [p[f] for f in FIELDS if f != "uid"]
+    values = [p.get(f, 0) for f in FIELDS if f != "uid"]
     values.append(p["uid"])
     c.execute(f"UPDATE players SET {placeholders} WHERE uid=%s", values)
     conn.commit()
