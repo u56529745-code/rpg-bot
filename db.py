@@ -7,14 +7,17 @@ FIELDS = [
     "uid", "name", "level", "exp", "hp", "max_hp", "silver", "floor",
     "mob_kill", "keys", "strength", "agility", "vitality", "stat_points",
     "weapon", "armor", "accessory",
-    "prof_smith", "prof_armorer", "prof_jeweler", "prof_alchemist",
-    "exp_smith", "exp_armorer", "exp_jeweler", "exp_alchemist",
+    "prof_smith", "prof_armorer", "prof_jeweler", "prof_alchemist", "prof_miner",
+    "exp_smith", "exp_armorer", "exp_jeweler", "exp_alchemist", "exp_miner",
     "energy", "max_energy", "last_energy_time",
     "copper", "iron", "gold", "mithril", "gem",
     "storm_kelp", "salt_crystal", "thunder_pearl", "fire_flower",
     "hp_small", "hp_big", "str_potion", "def_potion",
     "kills", "mine_count", "boss_kills",
     "crafted_items",
+    "auto_mine_active", "auto_mine_started", "auto_mine_last_collect",
+    "auto_mine_copper", "auto_mine_iron", "auto_mine_gold",
+    "auto_mine_mithril", "auto_mine_gem",
 ]
 
 def init_db():
@@ -42,10 +45,12 @@ def init_db():
         prof_armorer INTEGER DEFAULT 1,
         prof_jeweler INTEGER DEFAULT 1,
         prof_alchemist INTEGER DEFAULT 1,
+        prof_miner INTEGER DEFAULT 1,
         exp_smith INTEGER DEFAULT 0,
         exp_armorer INTEGER DEFAULT 0,
         exp_jeweler INTEGER DEFAULT 0,
         exp_alchemist INTEGER DEFAULT 0,
+        exp_miner INTEGER DEFAULT 0,
         energy INTEGER DEFAULT 250,
         max_energy INTEGER DEFAULT 250,
         last_energy_time REAL DEFAULT 0,
@@ -65,8 +70,36 @@ def init_db():
         kills INTEGER DEFAULT 0,
         mine_count INTEGER DEFAULT 0,
         boss_kills INTEGER DEFAULT 0,
-        crafted_items TEXT DEFAULT '[]'
+        crafted_items TEXT DEFAULT '[]',
+        auto_mine_active INTEGER DEFAULT 0,
+        auto_mine_started REAL DEFAULT 0,
+        auto_mine_last_collect REAL DEFAULT 0,
+        auto_mine_copper INTEGER DEFAULT 0,
+        auto_mine_iron INTEGER DEFAULT 0,
+        auto_mine_gold INTEGER DEFAULT 0,
+        auto_mine_mithril INTEGER DEFAULT 0,
+        auto_mine_gem INTEGER DEFAULT 0
     )""")
+
+    # Миграция: добавляем новые поля, если их нет
+    migrations = [
+        ("prof_miner", "INTEGER DEFAULT 1"),
+        ("exp_miner", "INTEGER DEFAULT 0"),
+        ("auto_mine_active", "INTEGER DEFAULT 0"),
+        ("auto_mine_started", "REAL DEFAULT 0"),
+        ("auto_mine_last_collect", "REAL DEFAULT 0"),
+        ("auto_mine_copper", "INTEGER DEFAULT 0"),
+        ("auto_mine_iron", "INTEGER DEFAULT 0"),
+        ("auto_mine_gold", "INTEGER DEFAULT 0"),
+        ("auto_mine_mithril", "INTEGER DEFAULT 0"),
+        ("auto_mine_gem", "INTEGER DEFAULT 0"),
+    ]
+    for col, definition in migrations:
+        try:
+            c.execute(f"ALTER TABLE players ADD COLUMN {col} {definition}")
+        except:
+            pass
+
     conn.commit()
     conn.close()
 
