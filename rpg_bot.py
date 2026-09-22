@@ -1,13 +1,13 @@
 import telebot
 from telebot import types
-import threading, time, os, random
+import threading, time, os, random, json
 from flask import Flask
 from data import *
 from db import init_db, get_player, save_player, exp_needed
 from battle import calc_player_stats, make_mob, player_turn, mob_turn, roll_herb, roll_ore, battle_text
 from craft import can_craft, do_craft
 
-TOKEN = "8620344298:AAE2ujryb1t547U46VKHxqRU10Gok8qJj9c"
+TOKEN = "8620344298:AAHr_PhXczz08rhQHgd_DpQt13rwIA2XPgA"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
@@ -29,16 +29,42 @@ def regen_energy(p):
         p["energy"] = min(p["max_energy"], p["energy"] + regen)
         p["last_energy_time"] = now
 
-def fmt(n):
-    if n is None:
-        return "—"
-    if n >= 1e9:
-        return f"{n/1e9:.3f} млрд"
-    if n >= 1e6:
-        return f"{n/1e6:.3f} млн"
-    if n >= 1e3:
-        return f"{n/1e3:.3f}к"
-    return str(n)
+def stat_of(key):
+    if key in WEAPONS:
+        return WEAPONS[key]["dmg"]
+    if key in ARMORS:
+        return ARMORS[key]["def"]
+    if key in ACCESSORIES:
+        return ACCESSORIES[key]["bonus"]
+    return 0
+
+def item_name(key):
+    if key in WEAPONS:
+        return WEAPONS[key]["name"]
+    if key in ARMORS:
+        return ARMORS[key]["name"]
+    if key in ACCESSORIES:
+        return ACCESSORIES[key]["name"]
+    return key
+
+def item_type(key):
+    if key in WEAPONS:
+        return "weapon"
+    if key in ARMORS:
+        return "armor"
+    if key in ACCESSORIES:
+        return "accessory"
+    return None
+
+def try_equip_if_better(p, key):
+    t = item_type(key)
+    if t is None:
+        return False
+    current = p.get(t, "none")
+    if stat_of(key) > stat_of(current):
+        p[t] = key
+        return True
+    return False
 
 LINE = "━━━━━━━━━━━━━━━━━━"
 
@@ -51,6 +77,7 @@ def main_menu():
         types.InlineKeyboardButton("🔨 Крафт", callback_data="craft"),
         types.InlineKeyboardButton("🎒 Инвентарь", callback_data="inv"),
         types.InlineKeyboardButton("📊 Статы", callback_data="stats"),
+        types.InlineKeyboardButton("📦 Скрафчено", callback_data="crafted"),
     )
     return m
 
@@ -392,6 +419,40 @@ def inv(c):
         f"🔥 Огнецвет: {p['fire_flower']}"
     )
     m = types.InlineKeyboardMarkup()
+    m.add(types.InlineKeyboardButton("📦 Скрафчено", callback_data="crafted"),
+          types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
+                              reply_markup=m, parse_mode="Markdown")
+    except:
+        pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "crafted")
+def crafted_menu(c):
+    p = get_player(c.from_user.id)
+    try:
+        items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except:
+        items = []
+    if not items:
+        text = "📦 *СКРАФЧЕНО*\n\nПока пусто. Скрафти что-нибудь! 🔨"
+        m = types.InlineKeyboardMarkup()
+        m.add(types.InlineKeyboardButton("🔨 Крафт", callback_data="craft"),
+              types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
+        try:
+            bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
+                                  reply_markup=m, parse_mode="Markdown")
+        except:
+            pass
+        bot.answer_callback_query(c.id)
+        return
+    text = f"📦 *СКРАФЧЕНО* ({len(items)})\n{LINE}\nВыбери предмет:"
+    m = types.InlineKeyboardMarkup(row_width=1)
+    for i, key in enumerate(items):
+        name = item_name(key)
+        s = stat_of(key)
+        m.add(types.InlineKeyboardButton(f"{name} (+{s})", callback_data=f"item_{i}"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
         bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
@@ -399,6 +460,78 @@ def inv(c):
     except:
         pass
     bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("item_"))
+def item_action(c):
+    p = get_player(c.from_user.id)
+    idx = int(c.data.split("_")[1])
+    try:
+        items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except:
+        items = []
+    if idx >= len(items):
+        bot.answer_callback_query(c.id, "❌ Предмет не найден")
+        return
+    key = items[idx]
+    name = item_name(key)
+    s = stat_of(key)
+    text = (
+        f"📦 *{name}*\n{LINE}\n"
+        f"📊 Бонус: +{s}\n\n"
+        f"Что сделать?"
+    )
+    m = types.InlineKeyboardMarkup(row_width=2)
+    m.add(
+        types.InlineKeyboardButton("✅ Надеть", callback_data=f"equip_{idx}"),
+        types.InlineKeyboardButton("💰 Продать", callback_data=f"sell_{idx}"),
+    )
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="crafted"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
+                              reply_markup=m, parse_mode="Markdown")
+    except:
+        pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("equip_"))
+def equip_item(c):
+    p = get_player(c.from_user.id)
+    idx = int(c.data.split("_")[1])
+    try:
+        items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except:
+        items = []
+    if idx >= len(items):
+        bot.answer_callback_query(c.id, "❌ Предмет не найден")
+        return
+    key = items[idx]
+    t = item_type(key)
+    if t:
+        p[t] = key
+        save_player(p)
+        bot.answer_callback_query(c.id, f"✅ {item_name(key)} надето!")
+    else:
+        bot.answer_callback_query(c.id, "❌ Нельзя надеть")
+    crafted_menu(c)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("sell_"))
+def sell_item(c):
+    p = get_player(c.from_user.id)
+    idx = int(c.data.split("_")[1])
+    try:
+        items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except:
+        items = []
+    if idx >= len(items):
+        bot.answer_callback_query(c.id, "❌ Предмет не найден")
+        return
+    key = items.pop(idx)
+    price = max(50, stat_of(key) * 20)
+    p["silver"] += price
+    p["crafted_items"] = json.dumps(items)
+    save_player(p)
+    bot.answer_callback_query(c.id, f"💰 Продано за {price}")
+    crafted_menu(c)
 
 @bot.callback_query_handler(func=lambda c: c.data == "craft")
 def craft_menu(c):
@@ -452,14 +585,11 @@ def make_item(c):
     p = get_player(c.from_user.id)
     ok, msg = do_craft(p, key)
     if ok:
-        if key in WEAPONS:
-            p["weapon"] = key
-        elif key in ARMORS:
-            p["armor"] = key
-        elif key in ACCESSORIES:
-            p["accessory"] = key
+        equipped = try_equip_if_better(p, key)
+        if equipped:
+            msg += f"\n🔥 Автонадето (лучше текущего)!"
     save_player(p)
-    bot.answer_callback_query(c.id, msg)
+    bot.answer_callback_query(c.id, msg[:200])
     craft_category(c)
 
 def run_flask():
