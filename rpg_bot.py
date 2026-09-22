@@ -10,7 +10,7 @@ from battle import (
 )
 from craft import can_craft, do_craft
 
-TOKEN = "8620344298:AAH6VMJ1e6ShXdykk796EG9IidjESEI4E9c"
+TOKEN = "8620344298:AAG4CvwDYP6bySc5ZLn5_tJTjpGpOPVHC6U"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
@@ -413,10 +413,14 @@ def process_auto_mine(p):
     cycles = min(elapsed // 5, 8640)
     for _ in range(cycles):
         for key, amt, exp in roll_ore_drop(p["prof_miner"]):
-            p[key] = (p.get(key, 0) or 0) + amt
+            field = f"auto_mine_{key}"
+            if field in p:
+                p[field] = (p.get(field, 0) or 0) + amt
         if random.randint(1, 100) <= 30:
             for key, amt, exp in roll_gem_drop(p["prof_miner"]):
-                p[key] = (p.get(key, 0) or 0) + amt
+                field = f"auto_mine_{key}"
+                if field in p:
+                    p[field] = (p.get(field, 0) or 0) + amt
     p["auto_mine_last_collect"] = now
 
 def auto_mine_active_markup():
@@ -440,19 +444,21 @@ def auto_mine_text(p):
     minutes = elapsed_min % 60
     bonus = MINER_BONUS.get(p["prof_miner"], 0)
     lines = []
-    for k, v in ORES.items():
-        if p.get(k, 0) > 0:
-            tier = ORE_TIER.get(k, "?")
-            lines.append(f"{v['name']} ({tier}): {p[k]}")
-    for k, v in GEMS.items():
-        if p.get(k, 0) > 0:
-            tier = GEM_TIER.get(k, "?")
-            lines.append(f"{v['name']} ({tier}): {p[k]}")
+    for key in list(ORES.keys()) + list(GEMS.keys()):
+        val = p.get(f"auto_mine_{key}", 0) or 0
+        if val > 0:
+            if key in ORES:
+                tier = ORE_TIER.get(key, "?")
+                name = ORES[key]["name"]
+            else:
+                tier = GEM_TIER.get(key, "?")
+                name = GEMS[key]["name"]
+            lines.append(f"{name} ({tier}): {val}")
     return (
         f"⚙️ *АВТО-ШАХТА*\n{LINE}\n"
         f"⏱ Работает: {hours}ч {minutes}мин\n"
         f"⛏ Шахтёр: ур.{p['prof_miner']} (+{bonus}%)\n\n"
-        + ("\n".join(lines) if lines else "Пока пусто. Руда копится в инвентаре.")
+        + ("\n".join(lines) if lines else "Пока пусто.")
     )
 
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_menu")
@@ -465,8 +471,7 @@ def auto_mine_menu(c):
     else:
         text = (
             f"⚙️ *АВТО-ШАХТА*\n{LINE}\n"
-            f"Копает в фоне (все руды + самоцветы).\n"
-            f"Руда сразу идёт в инвентарь.\n\n"
+            f"Копает в фоне (все руды + самоцветы).\n\n"
             f"⚡ 2⚡ / 5 сек\n"
             f"⏱ Макс: 12 часов\n"
             f"📈 Опыт шахтёра капает\n\n"
@@ -485,6 +490,11 @@ def auto_mine_start(c):
     p["auto_mine_active"] = 1
     p["auto_mine_started"] = now
     p["auto_mine_last_collect"] = now
+    # Обнуляем накопленное
+    for key in list(ORES.keys()) + list(GEMS.keys()):
+        field = f"auto_mine_{key}"
+        if field in p:
+            p[field] = 0
     save_player(p)
     bot.answer_callback_query(c.id, "⛏ Запущена!")
     auto_mine_menu(c)
@@ -504,11 +514,19 @@ def auto_mine_check(c):
 def auto_mine_collect(c):
     p = get_player(c.from_user.id)
     process_auto_mine(p)
+    total = 0
+    for key in list(ORES.keys()) + list(GEMS.keys()):
+        field = f"auto_mine_{key}"
+        amt = p.get(field, 0) or 0
+        if amt > 0:
+            p[key] = (p.get(key, 0) or 0) + amt
+            p[field] = 0
+            total += amt
     p["auto_mine_active"] = 0
     p["auto_mine_started"] = 0
     p["auto_mine_last_collect"] = 0
     save_player(p)
-    bot.answer_callback_query(c.id, "💰 Забрано! Руда в инвентаре.")
+    bot.answer_callback_query(c.id, f"💰 Забрано: {total} шт.")
     auto_mine_menu(c)
 
 # ИНВЕНТАРЬ
