@@ -1,11 +1,13 @@
 # ============ РУДА (10) ============
+import random
+
 ORES = {
     "copper": {"name": "🟠 Медь", "price": 30, "level": 1},
     "iron": {"name": "⚙️ Железо", "price": 80, "level": 2},
     "gold": {"name": "🟡 Золото", "price": 200, "level": 3},
     "mithril": {"name": "💠 Мифрил", "price": 800, "level": 4},
     "lead": {"name": "⚫ Свинец", "price": 1500, "level": 5},
-    "silver": {"name": "🔘 Серебро", "price": 3000, "level": 6},
+    "silver_ore": {"name": "🔘 Серебро", "price": 3000, "level": 6},
     "platinum": {"name": "🔶 Платина", "price": 6000, "level": 7},
     "titanite": {"name": "🟣 Титанит", "price": 12000, "level": 8},
     "adamantite": {"name": "🔷 Адамантит", "price": 25000, "level": 9},
@@ -354,3 +356,139 @@ def miner_bonus(level):
         return 30 + (level - 60) // 4
 
 MINER_BONUS = {i: miner_bonus(i) for i in range(1, 101)}
+
+# ============ ТИРЫ РУДЫ ============
+ORE_TIER = {
+    "copper": "E",
+    "iron": "D",
+    "gold": "C",
+    "mithril": "B",
+    "lead": "A",
+    "silver_ore": "S",
+    "platinum": "SS",
+    "titanite": "SSS",
+    "adamantite": "SSS+",
+    "star_metal": "SSS+",
+}
+
+# ============ ТИРЫ САМОЦВЕТОВ ============
+GEM_TIER = {
+    "emerald": "E",
+    "sapphire": "D",
+    "amethyst": "C",
+    "topaz": "B",
+    "ruby": "A",
+    "diamond": "S",
+    "garnet": "SS",
+    "tanzanite": "SSS",
+    "onyx": "SSS",
+    "moonstone": "SSS+",
+}
+
+# ============ ОПЫТ ЗА ЕДИНИЦУ РУДЫ ============
+ORE_EXP = {
+    "copper": 2,
+    "iron": 4,
+    "gold": 8,
+    "mithril": 14,
+    "lead": 24,
+    "silver_ore": 36,
+    "platinum": 50,
+    "titanite": 350,
+    "adamantite": 500,
+    "star_metal": 750,
+}
+
+# ============ ОПЫТ ЗА ЕДИНИЦУ САМОЦВЕТА ============
+GEM_EXP = {
+    "emerald": 4,
+    "sapphire": 8,
+    "amethyst": 16,
+    "topaz": 28,
+    "ruby": 96,
+    "diamond": 144,
+    "garnet": 200,
+    "tanzanite": 700,
+    "onyx": 900,
+    "moonstone": 1200,
+}
+
+# ============ ШАНСЫ КОЛИЧЕСТВА ============
+def roll_amount():
+    roll = random.random() * 100
+    if roll < 73.5:
+        return random.randint(1, 5)
+    elif roll < 93.5:
+        return random.randint(6, 10)
+    elif roll < 98.5:
+        return random.randint(11, 20)
+    elif roll < 100.0:
+        return random.randint(21, 35)
+    else:
+        return 50
+
+# ============ ШАНСЫ РЕСУРСОВ ПО УРОВНЮ ШАХТЁРА ============
+def ore_chances(miner_level):
+    if miner_level <= 10:
+        return {
+            "copper": 70, "iron": 25, "gold": 5,
+        }
+    elif miner_level <= 30:
+        return {
+            "copper": 50, "iron": 30, "gold": 15, "mithril": 5,
+        }
+    elif miner_level <= 60:
+        return {
+            "copper": 30, "iron": 30, "gold": 25, "mithril": 10,
+            "lead": 5,
+        }
+    elif miner_level <= 90:
+        return {
+            "copper": 15, "iron": 25, "gold": 25, "mithril": 15,
+            "lead": 12, "silver_ore": 6, "platinum": 2,
+        }
+    else:
+        return {
+            "copper": 8, "iron": 17, "gold": 25, "mithril": 18,
+            "lead": 15, "silver_ore": 10, "platinum": 5,
+            "titanite": 1.5, "adamantite": 0.4, "star_metal": 0.1,
+        }
+
+def gem_chances(miner_level):
+    if miner_level <= 10:
+        return {
+            "emerald": 70, "sapphire": 25, "amethyst": 5,
+        }
+    elif miner_level <= 30:
+        return {
+            "emerald": 50, "sapphire": 30, "amethyst": 15, "topaz": 5,
+        }
+    elif miner_level <= 60:
+        return {
+            "emerald": 30, "sapphire": 30, "amethyst": 25, "topaz": 10,
+            "ruby": 5,
+        }
+    elif miner_level <= 90:
+        return {
+            "emerald": 15, "sapphire": 25, "amethyst": 25, "topaz": 15,
+            "ruby": 12, "diamond": 6, "garnet": 2,
+        }
+    else:
+        return {
+            "emerald": 8, "sapphire": 17, "amethyst": 25, "topaz": 18,
+            "ruby": 15, "diamond": 10, "garnet": 5,
+            "tanzanite": 1.5, "onyx": 0.4, "moonstone": 0.1,
+        }
+
+# ============ ВЕСА ДЛЯ ROLL_ORE / ROLL_GEM ============
+import random as _random
+
+def pick_weighted(chances):
+    """Выбирает ключ по весам."""
+    roll = _random.random() * 100
+    acc = 0
+    for key, weight in chances.items():
+        acc += weight
+        if roll < acc:
+            return key
+    return list(chances.keys())[-1]
