@@ -1,9 +1,9 @@
-import sqlite3
+import os
+import psycopg2
 from data import prof_exp_needed, total_prof_exp
 
-DB = "rpg.db"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Все ресурсы (руда, самоцветы, травы, лут)
 ORES_LIST = ["copper", "iron", "gold", "mithril", "lead", "silver_ore",
              "platinum", "titanite", "adamantite", "star_metal"]
 GEMS_LIST = ["emerald", "sapphire", "amethyst", "topaz", "ruby",
@@ -35,12 +35,15 @@ FIELDS = (
     + ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST
 )
 
+def get_conn():
+    return psycopg2.connect(DATABASE_URL)
+
 def _build_create_sql():
     parts = [
-        "uid INTEGER PRIMARY KEY", "name TEXT",
+        "uid BIGINT PRIMARY KEY", "name TEXT",
         "level INTEGER DEFAULT 1", "exp INTEGER DEFAULT 0",
         "hp INTEGER DEFAULT 100", "max_hp INTEGER DEFAULT 100",
-        "silver INTEGER DEFAULT 150", "floor INTEGER DEFAULT 1",
+        "silver BIGINT DEFAULT 150", "floor INTEGER DEFAULT 1",
         "mob_kill INTEGER DEFAULT 0", "keys INTEGER DEFAULT 0",
         "strength INTEGER DEFAULT 0", "agility INTEGER DEFAULT 0",
         "vitality INTEGER DEFAULT 0", "stat_points INTEGER DEFAULT 0",
@@ -53,15 +56,15 @@ def _build_create_sql():
         "exp_jeweler INTEGER DEFAULT 0", "exp_alchemist INTEGER DEFAULT 0",
         "exp_miner INTEGER DEFAULT 0",
         "energy INTEGER DEFAULT 250", "max_energy INTEGER DEFAULT 250",
-        "last_energy_time REAL DEFAULT 0",
+        "last_energy_time DOUBLE PRECISION DEFAULT 0",
         "hp_small INTEGER DEFAULT 0", "hp_big INTEGER DEFAULT 0",
         "str_potion INTEGER DEFAULT 0", "def_potion INTEGER DEFAULT 0",
         "kills INTEGER DEFAULT 0", "mine_count INTEGER DEFAULT 0",
         "boss_kills INTEGER DEFAULT 0",
         "crafted_items TEXT DEFAULT '[]'",
         "auto_mine_active INTEGER DEFAULT 0",
-        "auto_mine_started REAL DEFAULT 0",
-        "auto_mine_last_collect REAL DEFAULT 0",
+        "auto_mine_started DOUBLE PRECISION DEFAULT 0",
+        "auto_mine_last_collect DOUBLE PRECISION DEFAULT 0",
         "auto_mine_copper INTEGER DEFAULT 0",
         "auto_mine_iron INTEGER DEFAULT 0",
         "auto_mine_gold INTEGER DEFAULT 0",
@@ -73,54 +76,32 @@ def _build_create_sql():
     return "CREATE TABLE IF NOT EXISTS players (" + ", ".join(parts) + ")"
 
 def init_db():
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
     c.execute(_build_create_sql())
-
-    migrations = [
-        ("prof_miner", "INTEGER DEFAULT 1"),
-        ("exp_miner", "INTEGER DEFAULT 0"),
-        ("auto_mine_active", "INTEGER DEFAULT 0"),
-        ("auto_mine_started", "REAL DEFAULT 0"),
-        ("auto_mine_last_collect", "REAL DEFAULT 0"),
-        ("auto_mine_copper", "INTEGER DEFAULT 0"),
-        ("auto_mine_iron", "INTEGER DEFAULT 0"),
-        ("auto_mine_gold", "INTEGER DEFAULT 0"),
-        ("auto_mine_mithril", "INTEGER DEFAULT 0"),
-        ("auto_mine_gem", "INTEGER DEFAULT 0"),
-    ]
-    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
-        migrations.append((r, "INTEGER DEFAULT 0"))
-
-    for col, definition in migrations:
-        try:
-            c.execute(f"ALTER TABLE players ADD COLUMN {col} {definition}")
-        except:
-            pass
-
     conn.commit()
     conn.close()
 
 def get_player(uid, name="Игрок"):
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM players WHERE uid=?", (uid,))
+    c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
     row = c.fetchone()
     if not row:
-        c.execute("INSERT INTO players (uid, name) VALUES (?, ?)", (uid, name))
+        c.execute("INSERT INTO players (uid, name) VALUES (%s, %s)", (uid, name))
         conn.commit()
-        c.execute("SELECT * FROM players WHERE uid=?", (uid,))
+        c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
         row = c.fetchone()
     conn.close()
     return dict(zip(FIELDS, row))
 
 def save_player(p):
-    conn = sqlite3.connect(DB)
+    conn = get_conn()
     c = conn.cursor()
-    placeholders = ", ".join(f"{f}=?" for f in FIELDS if f != "uid")
+    placeholders = ", ".join(f"{f}=%s" for f in FIELDS if f != "uid")
     values = [p[f] for f in FIELDS if f != "uid"]
     values.append(p["uid"])
-    c.execute(f"UPDATE players SET {placeholders} WHERE uid=?", values)
+    c.execute(f"UPDATE players SET {placeholders} WHERE uid=%s", values)
     conn.commit()
     conn.close()
 
