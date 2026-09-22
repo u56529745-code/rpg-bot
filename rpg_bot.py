@@ -356,7 +356,6 @@ def dig(c):
     if random.randint(1, 100) <= 30:
         gem_drops = roll_gem_drop(p["prof_miner"])
 
-    # Объединяем дубликаты
     merged = {}
     for key, amt, exp in ore_drops:
         if key not in merged:
@@ -414,9 +413,7 @@ def process_auto_mine(p):
     cycles = min(elapsed // 5, 8640)
     for _ in range(cycles):
         for key, amt, exp in roll_ore_drop(p["prof_miner"]):
-            field = f"auto_mine_{key}" if key in ("copper","iron","gold","mithril","gem") else key
-            if field in p:
-                p[field] = (p.get(field, 0) or 0) + amt
+            p[key] = (p.get(key, 0) or 0) + amt
         if random.randint(1, 100) <= 30:
             for key, amt, exp in roll_gem_drop(p["prof_miner"]):
                 p[key] = (p.get(key, 0) or 0) + amt
@@ -437,29 +434,25 @@ def auto_mine_start_markup():
     return m
 
 def auto_mine_text(p):
-    totals = {}
-    for key in list(ORES.keys()) + list(GEMS.keys()):
-        val = p.get(key, 0) or 0
-        if val > 0:
-            totals[key] = val
     started = p.get("auto_mine_started", 0) or 0
     elapsed_min = int((time.time() - started) / 60) if started else 0
     hours = elapsed_min // 60
     minutes = elapsed_min % 60
     bonus = MINER_BONUS.get(p["prof_miner"], 0)
     lines = []
-    for key, amt in totals.items():
-        if key in ORES:
-            tier = ORE_TIER.get(key, "?")
-            lines.append(f"{ORES[key]['name']} ({tier}): {amt}")
-        else:
-            tier = GEM_TIER.get(key, "?")
-            lines.append(f"{GEMS[key]['name']} ({tier}): {amt}")
+    for k, v in ORES.items():
+        if p.get(k, 0) > 0:
+            tier = ORE_TIER.get(k, "?")
+            lines.append(f"{v['name']} ({tier}): {p[k]}")
+    for k, v in GEMS.items():
+        if p.get(k, 0) > 0:
+            tier = GEM_TIER.get(k, "?")
+            lines.append(f"{v['name']} ({tier}): {p[k]}")
     return (
         f"⚙️ *АВТО-ШАХТА*\n{LINE}\n"
         f"⏱ Работает: {hours}ч {minutes}мин\n"
         f"⛏ Шахтёр: ур.{p['prof_miner']} (+{bonus}%)\n\n"
-        + ("\n".join(lines) if lines else "Пока пусто.")
+        + ("\n".join(lines) if lines else "Пока пусто. Руда копится в инвентаре.")
     )
 
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_menu")
@@ -472,7 +465,8 @@ def auto_mine_menu(c):
     else:
         text = (
             f"⚙️ *АВТО-ШАХТА*\n{LINE}\n"
-            f"Копает в фоне (все руды + самоцветы).\n\n"
+            f"Копает в фоне (все руды + самоцветы).\n"
+            f"Руда сразу идёт в инвентарь.\n\n"
             f"⚡ 2⚡ / 5 сек\n"
             f"⏱ Макс: 12 часов\n"
             f"📈 Опыт шахтёра капает\n\n"
@@ -513,10 +507,8 @@ def auto_mine_collect(c):
     p["auto_mine_active"] = 0
     p["auto_mine_started"] = 0
     p["auto_mine_last_collect"] = 0
-    for key in list(ORES.keys()) + list(GEMS.keys()):
-        p[key] = 0
     save_player(p)
-    bot.answer_callback_query(c.id, "💰 Забрано!")
+    bot.answer_callback_query(c.id, "💰 Забрано! Руда в инвентаре.")
     auto_mine_menu(c)
 
 # ИНВЕНТАРЬ
