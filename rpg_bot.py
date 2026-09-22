@@ -658,4 +658,83 @@ def craft_menu(c):
     except: pass
     bot.answer_callback_query(c.id)
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith
+@bot.callback_query_handler(func=lambda c: c.data.startswith("craft_") and c.data.count("_") == 1)
+def craft_category(c):
+    prof = c.data.replace("craft_", "")
+    p = get_player(c.from_user.id)
+    text = f"🔨 *{PROFESSIONS[prof]}*\n{LINE}\nВыбери рецепт:"
+    m = types.InlineKeyboardMarkup(row_width=1)
+    for key, r in RECIPES.items():
+        if r["prof"] != prof: continue
+        can, _ = can_craft(p, key)
+        mark = "✅" if can else "🔒"
+        m.add(types.InlineKeyboardButton(f"{mark} {r['name']} (ур.{r['level']})",
+                                          callback_data=f"recipe_{key}"))
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="craft"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("recipe_"))
+def recipe_view(c):
+    key = c.data.replace("recipe_", "")
+    p = get_player(c.from_user.id)
+    r = RECIPES.get(key)
+    if not r:
+        bot.answer_callback_query(c.id, "❌ Нет рецепта"); return
+    prof = r["prof"]
+    lines = [f"🔨 *{r['name']}*", LINE,
+             f"Профессия: {PROFESSIONS[prof]}",
+             f"Уровень: {r['level']} (у тебя {p[f'prof_{prof}']})", ""]
+    if "ore" in r:
+        lines.append("🪨 *Ресурсы:*")
+        for res, amt in r["ore"].items():
+            have = p.get(res, 0)
+            mark = "✅" if have >= amt else "❌"
+            name = ORES.get(res, {}).get("name") or GEMS.get(res, {}).get("name", res)
+            lines.append(f"  {mark} {name}: {have}/{amt}")
+    if "herb" in r:
+        lines.append("🌿 *Травы:*")
+        for res, amt in r["herb"].items():
+            have = p.get(res, 0)
+            mark = "✅" if have >= amt else "❌"
+            name = HERBS.get(res, {}).get("name", res)
+            lines.append(f"  {mark} {name}: {have}/{amt}")
+    can, msg = can_craft(p, key)
+    lines.append("")
+    lines.append(LINE)
+    lines.append("✅ Можно крафтить!" if can else f"🔒 {msg}")
+    text = "\n".join(lines)
+    m = types.InlineKeyboardMarkup(row_width=1)
+    if can:
+        m.add(types.InlineKeyboardButton("🔨 Скрафтить", callback_data=f"make_{key}"))
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data=f"craft_{prof}"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("make_"))
+def make_item(c):
+    key = c.data.replace("make_", "")
+    p = get_player(c.from_user.id)
+    ok, msg = do_craft(p, key)
+    if ok:
+        equipped = try_equip_if_better(p, key)
+        if equipped: msg += "\n🔥 Автонадето!"
+    save_player(p)
+    bot.answer_callback_query(c.id, msg[:200])
+    r = RECIPES.get(key)
+    if r:
+        c.data = f"craft_{r['prof']}"
+        craft_category(c)
+
+def run_flask():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+if __name__ == "__main__":
+    init_db()
+    threading.Thread(target=run_flask, daemon=True).start()
+    print("RPG бот запущен...")
+    bot.infinity_polling()
