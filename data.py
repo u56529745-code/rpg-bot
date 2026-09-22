@@ -1,4 +1,4 @@
-# МОБЫ (100 на этаж)
+# МОБЫ
 MOB_NAMES = [
     "🐀 Крыса", "🦇 Летучая мышь", "🐺 Волк", "🐗 Кабан", "🐻 Медведь",
     "🦂 Скорпион", "🕷 Паук", "🐍 Змея", "🦊 Лиса", "🐆 Леопард",
@@ -61,43 +61,43 @@ ACCESSORIES = {
     "amulet_legend": {"name": "📿 Легендарный амулет", "bonus": 50, "level": 5},
 }
 
-# РЕЦЕПТЫ (профессия: кузнец, бронник, ювелир, алхимик)
+# РЕЦЕПТЫ
 RECIPES = {
-    # Оружие (кузнец)
     "sword": {"name": "🗡 Меч", "prof": "smith", "level": 1, "ore": {"copper": 5, "iron": 2}},
     "axe": {"name": "🪓 Топор", "prof": "smith", "level": 1, "ore": {"copper": 3, "iron": 4}},
     "spear": {"name": "🔱 Копьё", "prof": "smith", "level": 2, "ore": {"iron": 5, "gold": 2}},
     "magic": {"name": "🔮 Посох", "prof": "smith", "level": 3, "ore": {"iron": 3, "gold": 4, "mithril": 1}},
     "legend": {"name": "⚔️ Легендарный клинок", "prof": "smith", "level": 4, "ore": {"gold": 5, "mithril": 3, "gem": 1}},
-    # Броня (бронник)
     "leather": {"name": "🧥 Кожаная", "prof": "armorer", "level": 1, "ore": {"copper": 4}},
     "chain": {"name": "⛓ Кольчуга", "prof": "armorer", "level": 1, "ore": {"copper": 3, "iron": 3}},
     "plate": {"name": "🛡 Латная", "prof": "armorer", "level": 2, "ore": {"iron": 6}},
     "dragon": {"name": "🐲 Драконья", "prof": "armorer", "level": 3, "ore": {"gold": 5, "mithril": 2}},
     "titan": {"name": "⚡ Титановая", "prof": "armorer", "level": 4, "ore": {"mithril": 5, "gem": 2}},
-    # Аксессуары (ювелир)
     "ring_copper": {"name": "💍 Медное кольцо", "prof": "jeweler", "level": 1, "ore": {"copper": 3, "gem": 1}},
     "ring_iron": {"name": "💍 Железное кольцо", "prof": "jeweler", "level": 2, "ore": {"iron": 4, "gem": 2}},
     "amulet_gold": {"name": "📿 Золотой амулет", "prof": "jeweler", "level": 3, "ore": {"gold": 5, "gem": 3}},
     "ring_mithril": {"name": "💍 Мифриловое кольцо", "prof": "jeweler", "level": 4, "ore": {"mithril": 3, "gem": 5}},
     "amulet_legend": {"name": "📿 Легендарный амулет", "prof": "jeweler", "level": 5, "ore": {"mithril": 5, "gem": 10}},
-    # Зелья (алхимик)
     "hp_small": {"name": "🧪 Малое зелье HP", "prof": "alchemist", "level": 1, "herb": {"storm_kelp": 3, "salt_crystal": 1}},
     "hp_big": {"name": "🧪 Большое зелье HP", "prof": "alchemist", "level": 2, "herb": {"salt_crystal": 3, "thunder_pearl": 1}},
     "str_potion": {"name": "🧪 Зелье силы", "prof": "alchemist", "level": 3, "herb": {"thunder_pearl": 2, "fire_flower": 1}},
     "def_potion": {"name": "🧪 Зелье защиты", "prof": "alchemist", "level": 3, "herb": {"salt_crystal": 2, "fire_flower": 2}},
 }
 
-# ПРОФЕССИИ
+# ПРОФЕССИИ (добавлен Шахтёр)
 PROFESSIONS = {
     "smith": "⚒️ Кузнец",
     "armorer": "🛡 Бронник",
     "jeweler": "💍 Ювелир",
     "alchemist": "⚗️ Алхимик",
+    "miner": "⛏ Шахтёр",
 }
 
-# ОПЫТ ПРОФЕССИЙ (уровень: нужный опыт)
+# ОПЫТ ПРОФЕССИЙ
 PROF_EXP = {1: 0, 2: 100, 3: 300, 4: 700, 5: 1500}
+
+# БОНУС ШАХТЁРА К ДРОПУ (%)
+MINER_BONUS = {1: 0, 2: 3, 3: 7, 4: 15, 5: 20}
 
 # НАГРАДЫ ЗА ЭТАЖ
 FLOOR_REWARDS = {
