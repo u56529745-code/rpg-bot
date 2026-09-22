@@ -1,87 +1,82 @@
 import sqlite3
-from data import PROF_EXP
+from data import prof_exp_needed, total_prof_exp
 
 DB = "rpg.db"
 
-FIELDS = [
-    "uid", "name", "level", "exp", "hp", "max_hp", "silver", "floor",
-    "mob_kill", "keys", "strength", "agility", "vitality", "stat_points",
-    "weapon", "armor", "accessory",
-    "prof_smith", "prof_armorer", "prof_jeweler", "prof_alchemist", "prof_miner",
-    "exp_smith", "exp_armorer", "exp_jeweler", "exp_alchemist", "exp_miner",
-    "energy", "max_energy", "last_energy_time",
-    "copper", "iron", "gold", "mithril", "gem",
-    "storm_kelp", "salt_crystal", "thunder_pearl", "fire_flower",
-    "hp_small", "hp_big", "str_potion", "def_potion",
-    "kills", "mine_count", "boss_kills",
-    "crafted_items",
-    "auto_mine_active", "auto_mine_started", "auto_mine_last_collect",
-    "auto_mine_copper", "auto_mine_iron", "auto_mine_gold",
-    "auto_mine_mithril", "auto_mine_gem",
-]
+# Все ресурсы (руда, самоцветы, травы, лут)
+ORES_LIST = ["copper", "iron", "gold", "mithril", "lead", "silver",
+             "platinum", "titanite", "adamantite", "star_metal"]
+GEMS_LIST = ["emerald", "sapphire", "amethyst", "topaz", "ruby",
+             "diamond", "garnet", "tanzanite", "onyx", "moonstone"]
+HERBS_LIST = ["storm_kelp", "salt_crystal", "thunder_pearl", "fire_flower",
+              "glow_moss", "blood_rose", "void_flower", "ender_orchid",
+              "black_sakura", "star_clover", "moon_fern", "eye_cactus",
+              "whisper_tree", "weeping_lily", "clock_mushroom", "fire_ivy",
+              "frost_bell", "soul_tree", "teleport_liana", "predator_plant"]
+LOOT_LIST = ["wolf_fang", "spider_web", "scorpion_sting", "bear_claw",
+             "skeleton_bone", "hunter_eye", "dragon_scale", "golem_heart",
+             "phoenix_feather", "black_moon_shard", "void_fang", "thunder_horn",
+             "sky_feather", "shadow_claw", "mini_dragon_scale", "poison_sting",
+             "mushroom_skull", "chameleon_slime", "lava_heart", "ghost_raven_feather"]
+
+FIELDS = (
+    ["uid", "name", "level", "exp", "hp", "max_hp", "silver", "floor",
+     "mob_kill", "keys", "strength", "agility", "vitality", "stat_points",
+     "weapon", "armor", "accessory",
+     "prof_smith", "prof_armorer", "prof_jeweler", "prof_alchemist", "prof_miner",
+     "exp_smith", "exp_armorer", "exp_jeweler", "exp_alchemist", "exp_miner",
+     "energy", "max_energy", "last_energy_time",
+     "hp_small", "hp_big", "str_potion", "def_potion",
+     "kills", "mine_count", "boss_kills",
+     "crafted_items",
+     "auto_mine_active", "auto_mine_started", "auto_mine_last_collect",
+     "auto_mine_copper", "auto_mine_iron", "auto_mine_gold",
+     "auto_mine_mithril", "auto_mine_gem"]
+    + ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST
+)
+
+def _build_create_sql():
+    parts = [
+        "uid INTEGER PRIMARY KEY", "name TEXT",
+        "level INTEGER DEFAULT 1", "exp INTEGER DEFAULT 0",
+        "hp INTEGER DEFAULT 100", "max_hp INTEGER DEFAULT 100",
+        "silver INTEGER DEFAULT 150", "floor INTEGER DEFAULT 1",
+        "mob_kill INTEGER DEFAULT 0", "keys INTEGER DEFAULT 0",
+        "strength INTEGER DEFAULT 0", "agility INTEGER DEFAULT 0",
+        "vitality INTEGER DEFAULT 0", "stat_points INTEGER DEFAULT 0",
+        "weapon TEXT DEFAULT 'fists'", "armor TEXT DEFAULT 'none'",
+        "accessory TEXT DEFAULT 'none'",
+        "prof_smith INTEGER DEFAULT 1", "prof_armorer INTEGER DEFAULT 1",
+        "prof_jeweler INTEGER DEFAULT 1", "prof_alchemist INTEGER DEFAULT 1",
+        "prof_miner INTEGER DEFAULT 1",
+        "exp_smith INTEGER DEFAULT 0", "exp_armorer INTEGER DEFAULT 0",
+        "exp_jeweler INTEGER DEFAULT 0", "exp_alchemist INTEGER DEFAULT 0",
+        "exp_miner INTEGER DEFAULT 0",
+        "energy INTEGER DEFAULT 250", "max_energy INTEGER DEFAULT 250",
+        "last_energy_time REAL DEFAULT 0",
+        "hp_small INTEGER DEFAULT 0", "hp_big INTEGER DEFAULT 0",
+        "str_potion INTEGER DEFAULT 0", "def_potion INTEGER DEFAULT 0",
+        "kills INTEGER DEFAULT 0", "mine_count INTEGER DEFAULT 0",
+        "boss_kills INTEGER DEFAULT 0",
+        "crafted_items TEXT DEFAULT '[]'",
+        "auto_mine_active INTEGER DEFAULT 0",
+        "auto_mine_started REAL DEFAULT 0",
+        "auto_mine_last_collect REAL DEFAULT 0",
+        "auto_mine_copper INTEGER DEFAULT 0",
+        "auto_mine_iron INTEGER DEFAULT 0",
+        "auto_mine_gold INTEGER DEFAULT 0",
+        "auto_mine_mithril INTEGER DEFAULT 0",
+        "auto_mine_gem INTEGER DEFAULT 0",
+    ]
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
+        parts.append(f"{r} INTEGER DEFAULT 0")
+    return "CREATE TABLE IF NOT EXISTS players (" + ", ".join(parts) + ")"
 
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS players (
-        uid INTEGER PRIMARY KEY,
-        name TEXT,
-        level INTEGER DEFAULT 1,
-        exp INTEGER DEFAULT 0,
-        hp INTEGER DEFAULT 100,
-        max_hp INTEGER DEFAULT 100,
-        silver INTEGER DEFAULT 150,
-        floor INTEGER DEFAULT 1,
-        mob_kill INTEGER DEFAULT 0,
-        keys INTEGER DEFAULT 0,
-        strength INTEGER DEFAULT 0,
-        agility INTEGER DEFAULT 0,
-        vitality INTEGER DEFAULT 0,
-        stat_points INTEGER DEFAULT 0,
-        weapon TEXT DEFAULT 'fists',
-        armor TEXT DEFAULT 'none',
-        accessory TEXT DEFAULT 'none',
-        prof_smith INTEGER DEFAULT 1,
-        prof_armorer INTEGER DEFAULT 1,
-        prof_jeweler INTEGER DEFAULT 1,
-        prof_alchemist INTEGER DEFAULT 1,
-        prof_miner INTEGER DEFAULT 1,
-        exp_smith INTEGER DEFAULT 0,
-        exp_armorer INTEGER DEFAULT 0,
-        exp_jeweler INTEGER DEFAULT 0,
-        exp_alchemist INTEGER DEFAULT 0,
-        exp_miner INTEGER DEFAULT 0,
-        energy INTEGER DEFAULT 250,
-        max_energy INTEGER DEFAULT 250,
-        last_energy_time REAL DEFAULT 0,
-        copper INTEGER DEFAULT 0,
-        iron INTEGER DEFAULT 0,
-        gold INTEGER DEFAULT 0,
-        mithril INTEGER DEFAULT 0,
-        gem INTEGER DEFAULT 0,
-        storm_kelp INTEGER DEFAULT 0,
-        salt_crystal INTEGER DEFAULT 0,
-        thunder_pearl INTEGER DEFAULT 0,
-        fire_flower INTEGER DEFAULT 0,
-        hp_small INTEGER DEFAULT 0,
-        hp_big INTEGER DEFAULT 0,
-        str_potion INTEGER DEFAULT 0,
-        def_potion INTEGER DEFAULT 0,
-        kills INTEGER DEFAULT 0,
-        mine_count INTEGER DEFAULT 0,
-        boss_kills INTEGER DEFAULT 0,
-        crafted_items TEXT DEFAULT '[]',
-        auto_mine_active INTEGER DEFAULT 0,
-        auto_mine_started REAL DEFAULT 0,
-        auto_mine_last_collect REAL DEFAULT 0,
-        auto_mine_copper INTEGER DEFAULT 0,
-        auto_mine_iron INTEGER DEFAULT 0,
-        auto_mine_gold INTEGER DEFAULT 0,
-        auto_mine_mithril INTEGER DEFAULT 0,
-        auto_mine_gem INTEGER DEFAULT 0
-    )""")
+    c.execute(_build_create_sql())
 
-    # Миграция: добавляем новые поля, если их нет
     migrations = [
         ("prof_miner", "INTEGER DEFAULT 1"),
         ("exp_miner", "INTEGER DEFAULT 0"),
@@ -94,6 +89,9 @@ def init_db():
         ("auto_mine_mithril", "INTEGER DEFAULT 0"),
         ("auto_mine_gem", "INTEGER DEFAULT 0"),
     ]
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
+        migrations.append((r, "INTEGER DEFAULT 0"))
+
     for col, definition in migrations:
         try:
             c.execute(f"ALTER TABLE players ADD COLUMN {col} {definition}")
@@ -131,13 +129,11 @@ def exp_needed(level):
 
 def prof_level_for_exp(exp):
     lvl = 1
-    for l, need in sorted(PROF_EXP.items()):
-        if exp >= need:
-            lvl = l
-    return lvl
-
-def prof_next_exp(exp):
-    for l, need in sorted(PROF_EXP.items()):
-        if exp < need:
-            return need
-    return None
+    total = 0
+    for i in range(1, 100):
+        total += prof_exp_needed(i)
+        if exp >= total:
+            lvl = i + 1
+        else:
+            break
+    return min(lvl, 100)
