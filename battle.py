@@ -2,6 +2,8 @@ import random
 from data import (
     WEAPONS, ARMORS, ACCESSORIES, MOB_NAMES, MYSTIC_NAMES, BOSS_NAMES,
     HERBS, ORES, GEMS, MOB_LOOT, MINER_BONUS,
+    ORE_TIER, GEM_TIER, ORE_EXP, GEM_EXP,
+    roll_amount, ore_chances, gem_chances, pick_weighted,
 )
 
 def calc_player_stats(p):
@@ -86,39 +88,48 @@ def roll_herb(floor=1):
     idx = random.randint(0, max_idx)
     return pool[idx]
 
-def roll_ore(miner_level=1, penalty=0):
-    bonus = MINER_BONUS.get(miner_level, 0)
-    roll = random.randint(1, 100) + bonus - penalty
+def roll_ore_drop(miner_level):
+    """Возвращает список (ресурс, количество, опыт) — до 3 ресурсов."""
+    chances = ore_chances(miner_level)
+    drops = []
+    # 1-й ресурс — 100%
+    ore = pick_weighted(chances)
+    amt = roll_amount()
+    exp = ORE_EXP.get(ore, 1) * amt
+    drops.append((ore, amt, exp))
+    # 2-й — 40%
+    if random.randint(1, 100) <= 40:
+        ore = pick_weighted(chances)
+        amt = roll_amount()
+        exp = ORE_EXP.get(ore, 1) * amt
+        drops.append((ore, amt, exp))
+    # 3-й — 20%
+    if random.randint(1, 100) <= 20:
+        ore = pick_weighted(chances)
+        amt = roll_amount()
+        exp = ORE_EXP.get(ore, 1) * amt
+        drops.append((ore, amt, exp))
+    return drops
 
-    if roll <= 40:
-        return "copper", random.randint(1, 3)
-    if roll <= 65:
-        return "iron", random.randint(1, 2)
-    if roll <= 80:
-        return "gold", 1
-    if roll <= 90:
-        return "mithril", 1
-    if roll <= 96:
-        return "lead", 1
-    return "silver", 1
-
-def roll_gem(miner_level=1):
-    bonus = MINER_BONUS.get(miner_level, 0)
-    roll = random.randint(1, 100) + bonus
-
-    if roll <= 40:
-        return "emerald", 1
-    if roll <= 60:
-        return "sapphire", 1
-    if roll <= 75:
-        return "amethyst", 1
-    if roll <= 85:
-        return "topaz", 1
-    if roll <= 92:
-        return "ruby", 1
-    if roll <= 96:
-        return "diamond", 1
-    return "garnet", 1
+def roll_gem_drop(miner_level):
+    """Возвращает список (самоцвет, количество, опыт)."""
+    chances = gem_chances(miner_level)
+    drops = []
+    gem = pick_weighted(chances)
+    amt = roll_amount()
+    exp = GEM_EXP.get(gem, 1) * amt
+    drops.append((gem, amt, exp))
+    if random.randint(1, 100) <= 40:
+        gem = pick_weighted(chances)
+        amt = roll_amount()
+        exp = GEM_EXP.get(gem, 1) * amt
+        drops.append((gem, amt, exp))
+    if random.randint(1, 100) <= 20:
+        gem = pick_weighted(chances)
+        amt = roll_amount()
+        exp = GEM_EXP.get(gem, 1) * amt
+        drops.append((gem, amt, exp))
+    return drops
 
 def roll_loot(floor=1):
     pool = list(MOB_LOOT.keys())
