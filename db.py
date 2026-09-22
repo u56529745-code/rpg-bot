@@ -19,6 +19,9 @@ LOOT_LIST = ["wolf_fang", "spider_web", "scorpion_sting", "bear_claw",
              "sky_feather", "shadow_claw", "mini_dragon_scale", "poison_sting",
              "mushroom_skull", "chameleon_slime", "lava_heart", "ghost_raven_feather"]
 
+# Поля auto_mine_* для авто-шахты
+AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
+
 FIELDS = (
     ["uid", "name", "level", "exp", "hp", "max_hp", "silver", "floor",
      "mob_kill", "keys", "strength", "agility", "vitality", "stat_points",
@@ -29,10 +32,9 @@ FIELDS = (
      "hp_small", "hp_big", "str_potion", "def_potion",
      "kills", "mine_count", "boss_kills",
      "crafted_items",
-     "auto_mine_active", "auto_mine_started", "auto_mine_last_collect",
-     "auto_mine_copper", "auto_mine_iron", "auto_mine_gold",
-     "auto_mine_mithril", "auto_mine_gem"]
+     "auto_mine_active", "auto_mine_started", "auto_mine_last_collect"]
     + ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST
+    + AUTO_MINE_LIST
 )
 
 def get_conn():
@@ -65,13 +67,10 @@ def _build_create_sql():
         "auto_mine_active INTEGER DEFAULT 0",
         "auto_mine_started DOUBLE PRECISION DEFAULT 0",
         "auto_mine_last_collect DOUBLE PRECISION DEFAULT 0",
-        "auto_mine_copper INTEGER DEFAULT 0",
-        "auto_mine_iron INTEGER DEFAULT 0",
-        "auto_mine_gold INTEGER DEFAULT 0",
-        "auto_mine_mithril INTEGER DEFAULT 0",
-        "auto_mine_gem INTEGER DEFAULT 0",
     ]
     for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
+        parts.append(f"{r} INTEGER DEFAULT 0")
+    for r in AUTO_MINE_LIST:
         parts.append(f"{r} INTEGER DEFAULT 0")
     return "CREATE TABLE IF NOT EXISTS players (" + ", ".join(parts) + ")"
 
@@ -79,6 +78,26 @@ def init_db():
     conn = get_conn()
     c = conn.cursor()
     c.execute(_build_create_sql())
+
+    migrations = [
+        ("prof_miner", "INTEGER DEFAULT 1"),
+        ("exp_miner", "INTEGER DEFAULT 0"),
+        ("auto_mine_active", "INTEGER DEFAULT 0"),
+        ("auto_mine_started", "DOUBLE PRECISION DEFAULT 0"),
+        ("auto_mine_last_collect", "DOUBLE PRECISION DEFAULT 0"),
+    ]
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
+        migrations.append((r, "INTEGER DEFAULT 0"))
+    for r in AUTO_MINE_LIST:
+        migrations.append((r, "INTEGER DEFAULT 0"))
+
+    for col, definition in migrations:
+        try:
+            c.execute(f"ALTER TABLE players ADD COLUMN {col} {definition}")
+        except:
+            conn.rollback()
+            continue
+
     conn.commit()
     conn.close()
 
