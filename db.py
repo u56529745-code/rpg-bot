@@ -4,7 +4,7 @@ from data import prof_exp_needed, total_prof_exp
 DB = "rpg.db"
 
 # Все ресурсы (руда, самоцветы, травы, лут)
-ORES_LIST = ["copper", "iron", "gold", "mithril", "lead", "silver",
+ORES_LIST = ["copper", "iron", "gold", "mithril", "lead", "silver_ore",
              "platinum", "titanite", "adamantite", "star_metal"]
 GEMS_LIST = ["emerald", "sapphire", "amethyst", "topaz", "ruby",
              "diamond", "garnet", "tanzanite", "onyx", "moonstone"]
