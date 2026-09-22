@@ -13,7 +13,8 @@ FIELDS = [
     "copper", "iron", "gold", "mithril", "gem",
     "storm_kelp", "salt_crystal", "thunder_pearl", "fire_flower",
     "hp_small", "hp_big", "str_potion", "def_potion",
-    "kills", "mine_count", "boss_kills"
+    "kills", "mine_count", "boss_kills",
+    "crafted_items",
 ]
 
 def init_db():
@@ -63,7 +64,8 @@ def init_db():
         def_potion INTEGER DEFAULT 0,
         kills INTEGER DEFAULT 0,
         mine_count INTEGER DEFAULT 0,
-        boss_kills INTEGER DEFAULT 0
+        boss_kills INTEGER DEFAULT 0,
+        crafted_items TEXT DEFAULT '[]'
     )""")
     conn.commit()
     conn.close()
@@ -91,7 +93,8 @@ def save_player(p):
     conn.commit()
     conn.close()
 
-def exp_needed(level): return 50 + level * 30
+def exp_needed(level):
+    return 50 + level * 30
 
 def prof_level_for_exp(exp):
     lvl = 1
