@@ -6,11 +6,11 @@ from data import *
 from db import init_db, get_player, save_player, exp_needed, prof_level_for_exp
 from battle import (
     calc_player_stats, make_mob, player_turn, mob_turn,
-    roll_herb, roll_ore, roll_gem, roll_loot, battle_text,
+    roll_herb, roll_ore_drop, roll_gem_drop, roll_loot, battle_text,
 )
 from craft import can_craft, do_craft
 
-TOKEN = "8620344298:AAHf8yH-BjMeuqm-589bS_Q4ysofZ1imDtM"
+TOKEN = "8620344298:AAHr_PhXczz08rhQHgd_DpQt13rwIA2XPgA"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
@@ -33,41 +33,42 @@ def regen_energy(p):
         p["last_energy_time"] = now
 
 def stat_of(key):
-    if key in WEAPONS:
-        return WEAPONS[key]["dmg"]
-    if key in ARMORS:
-        return ARMORS[key]["def"]
-    if key in ACCESSORIES:
-        return ACCESSORIES[key]["bonus"]
+    if key in WEAPONS: return WEAPONS[key]["dmg"]
+    if key in ARMORS: return ARMORS[key]["def"]
+    if key in ACCESSORIES: return ACCESSORIES[key]["bonus"]
     return 0
 
 def item_name(key):
-    if key in WEAPONS:
-        return WEAPONS[key]["name"]
-    if key in ARMORS:
-        return ARMORS[key]["name"]
-    if key in ACCESSORIES:
-        return ACCESSORIES[key]["name"]
+    if key in WEAPONS: return WEAPONS[key]["name"]
+    if key in ARMORS: return ARMORS[key]["name"]
+    if key in ACCESSORIES: return ACCESSORIES[key]["name"]
     return key
 
 def item_type(key):
-    if key in WEAPONS:
-        return "weapon"
-    if key in ARMORS:
-        return "armor"
-    if key in ACCESSORIES:
-        return "accessory"
+    if key in WEAPONS: return "weapon"
+    if key in ARMORS: return "armor"
+    if key in ACCESSORIES: return "accessory"
     return None
 
 def try_equip_if_better(p, key):
     t = item_type(key)
-    if t is None:
-        return False
+    if t is None: return False
     current = p.get(t, "none")
     if stat_of(key) > stat_of(current):
         p[t] = key
         return True
     return False
+
+def format_drops(drops, is_gem=False):
+    """Форматирует список дропов: (key, amt, exp)"""
+    lines = []
+    total_exp = 0
+    for key, amt, exp in drops:
+        tier = GEM_TIER.get(key, "?") if is_gem else ORE_TIER.get(key, "?")
+        name = GEMS[key]["name"] if is_gem else ORES[key]["name"]
+        lines.append(f"{name} ({tier}) × {amt}")
+        total_exp += exp
+    return "\n".join(lines), total_exp
 
 LINE = "━━━━━━━━━━━━━━━━━━"
 
@@ -113,8 +114,7 @@ def back_menu(c):
     try:
         bot.edit_message_text(menu_text(p), c.message.chat.id, c.message.message_id,
                               reply_markup=main_menu(), parse_mode="Markdown")
-    except:
-        pass
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "profile")
@@ -144,10 +144,8 @@ def profile(c):
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "stats")
@@ -159,9 +157,7 @@ def stats(c):
         f"💪 Сила: {p['strength']}\n"
         f"🏃 Ловкость: {p['agility']}\n"
         f"❤️ Выносливость: {p['vitality']}\n\n"
-        f"⚔️ Урон: {dmg}\n"
-        f"🛡 Защита: {defense}\n"
-        f"💥 Крит: {crit}%\n\n"
+        f"⚔️ Урон: {dmg}\n🛡 Защита: {defense}\n💥 Крит: {crit}%\n\n"
         f"🎯 Очков: *{p['stat_points']}*"
     )
     m = types.InlineKeyboardMarkup(row_width=3)
@@ -173,23 +169,18 @@ def stats(c):
         )
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("up_"))
 def upgrade(c):
     p = get_player(c.from_user.id)
     if p["stat_points"] <= 0:
-        bot.answer_callback_query(c.id, "❌ Нет очков")
-        return
+        bot.answer_callback_query(c.id, "❌ Нет очков"); return
     s = c.data.split("_")[1]
-    if s == "str":
-        p["strength"] += 1
-    elif s == "agi":
-        p["agility"] += 1
+    if s == "str": p["strength"] += 1
+    elif s == "agi": p["agility"] += 1
     elif s == "vit":
         p["vitality"] += 1
         p["max_hp"] += 10
@@ -199,11 +190,11 @@ def upgrade(c):
     bot.answer_callback_query(c.id, "✅ Улучшено!")
     stats(c)
 
+# БАШНЯ
 @bot.callback_query_handler(func=lambda c: c.data == "tower")
 def tower(c):
     p = get_player(c.from_user.id)
-    regen_energy(p)
-    save_player(p)
+    regen_energy(p); save_player(p)
     if p["floor"] > 50:
         text = "🏰 *БАШНЯ ПРОЙДЕНА!*\n\n👑 Все 50 этажей покорены!"
     else:
@@ -221,10 +212,8 @@ def tower(c):
         m.add(types.InlineKeyboardButton(f"🔑 Ключ ({p['keys']})", callback_data="use_key"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "fight_start")
@@ -232,16 +221,14 @@ def fight_start(c):
     p = get_player(c.from_user.id)
     regen_energy(p)
     if p["energy"] < 5:
-        bot.answer_callback_query(c.id, "❌ Нет энергии")
-        return
+        bot.answer_callback_query(c.id, "❌ Нет энергии"); return
     p["energy"] -= 5
     is_boss = p["mob_kill"] >= 149
     mob = make_mob(p["floor"], is_boss)
     battles[c.from_user.id] = {"mob": mob}
     save_player(p)
     text = (
-        f"⚔️ *БОЙ НАЧАЛСЯ!*\n{LINE}\n"
-        f"{mob['name']}\n"
+        f"⚔️ *БОЙ НАЧАЛСЯ!*\n{LINE}\n{mob['name']}\n"
         f"❤️ HP: {mob['hp']}/{mob['max_hp']}\n"
         f"⚔️ Урон: {mob['dmg']}\n\n"
         f"❤️ Твой HP: {p['hp']}/{p['max_hp']}"
@@ -250,18 +237,15 @@ def fight_start(c):
     m.add(types.InlineKeyboardButton("⚔️ Атаковать", callback_data="fight_turn"))
     m.add(types.InlineKeyboardButton("🏳️ Сбежать", callback_data="fight_run"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "fight_turn")
 def fight_turn(c):
     uid = c.from_user.id
     if uid not in battles:
-        bot.answer_callback_query(c.id, "❌ Бой не найден")
-        return
+        bot.answer_callback_query(c.id, "❌ Бой не найден"); return
     p = get_player(uid)
     mob = battles[uid]["mob"]
     pdmg, is_crit, p_dodged = player_turn(p, mob)
@@ -274,15 +258,13 @@ def fight_turn(c):
         p["silver"] += mob["silver"]
         p["kills"] += 1
         p["mob_kill"] += 1
-        if mob.get("boss"):
-            p["boss_kills"] += 1
+        if mob.get("boss"): p["boss_kills"] += 1
         herb = roll_herb(p["floor"])
         p[herb] += 1
         loot = roll_loot(p["floor"])
         p[loot] = (p.get(loot, 0) or 0) + 1
         key_drop = random.randint(1, 100) <= 5
-        if key_drop:
-            p["keys"] += 1
+        if key_drop: p["keys"] += 1
         if p["mob_kill"] >= 150:
             p["keys"] += 1
             p["mob_kill"] = 0
@@ -304,56 +286,40 @@ def fight_turn(c):
             f"🌿 +1 {HERBS[herb]['name']}\n"
             f"👹 +1 {MOB_LOOT[loot]['name']}"
         )
-        if key_drop:
-            text += "\n🔑 *Ключ выпал!*"
-        if lvl_up:
-            text += f"\n\n⭐ *УРОВЕНЬ {p['level']}!* +3 очка"
+        if key_drop: text += "\n🔑 *Ключ выпал!*"
+        if lvl_up: text += f"\n\n⭐ *УРОВЕНЬ {p['level']}!* +3 очка"
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("🏰 Башня", callback_data="tower"),
               types.InlineKeyboardButton("🔙 Меню", callback_data="menu"))
         try:
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                                  reply_markup=m, parse_mode="Markdown")
-        except:
-            pass
-        bot.answer_callback_query(c.id)
-        return
+            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+        except: pass
+        bot.answer_callback_query(c.id); return
     if p["hp"] <= 0:
         p["hp"] = p["max_hp"]
-        save_player(p)
-        del battles[uid]
+        save_player(p); del battles[uid]
         text = "💀 *ПОРАЖЕНИЕ*\n\n❤️ HP восстановлен"
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("🏰 Башня", callback_data="tower"),
               types.InlineKeyboardButton("🔙 Меню", callback_data="menu"))
         try:
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                                  reply_markup=m, parse_mode="Markdown")
-        except:
-            pass
-        bot.answer_callback_query(c.id)
-        return
+            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+        except: pass
+        bot.answer_callback_query(c.id); return
     save_player(p)
-    text = (
-        f"⚔️ *БОЙ*\n{LINE}\n{log}\n{LINE}\n"
-        f"❤️ Твой HP: {p['hp']}/{p['max_hp']}\n"
-        f"⚡ Энергия: {p['energy']}"
-    )
+    text = f"⚔️ *БОЙ*\n{LINE}\n{log}\n{LINE}\n❤️ HP: {p['hp']}/{p['max_hp']}\n⚡ Энергия: {p['energy']}"
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("⚔️ Атаковать", callback_data="fight_turn"))
     m.add(types.InlineKeyboardButton("🏳️ Сбежать", callback_data="fight_run"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "fight_run")
 def fight_run(c):
     uid = c.from_user.id
-    if uid in battles:
-        del battles[uid]
+    if uid in battles: del battles[uid]
     bot.answer_callback_query(c.id, "🏳️ Сбежал!")
     tower(c)
 
@@ -361,21 +327,19 @@ def fight_run(c):
 def use_key(c):
     p = get_player(c.from_user.id)
     if p["keys"] <= 0:
-        bot.answer_callback_query(c.id, "❌ Нет ключей")
-        return
+        bot.answer_callback_query(c.id, "❌ Нет ключей"); return
     p["keys"] -= 1
     p["floor"] += 1
     p["mob_kill"] = 0
     save_player(p)
     bot.answer_callback_query(c.id, f"🔑 Этаж {p['floor']} открыт!")
     tower(c)
-    
-# ============ ШАХТА ============
+
+# ШАХТА
 @bot.callback_query_handler(func=lambda c: c.data == "mine")
 def mine(c):
     p = get_player(c.from_user.id)
-    regen_energy(p)
-    save_player(p)
+    regen_energy(p); save_player(p)
     bonus = MINER_BONUS.get(p["prof_miner"], 0)
     text = (
         f"⛏ *ШАХТА*\n{LINE}\n"
@@ -388,77 +352,69 @@ def mine(c):
     m.add(types.InlineKeyboardButton("⛏ Копать (2⚡)", callback_data="dig"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "dig")
 def dig(c):
     p = get_player(c.from_user.id)
     if p["energy"] < 2:
-        bot.answer_callback_query(c.id, "❌ Нет энергии")
-        return
+        bot.answer_callback_query(c.id, "❌ Нет энергии"); return
     p["energy"] -= 2
-    ore, amt = roll_ore(p["prof_miner"], 0)
-    p[ore] += amt
-    gem_chance = random.randint(1, 100)
-    gem_msg = ""
-    if gem_chance <= 30:
-        gem, gamt = roll_gem(p["prof_miner"])
-        p[gem] += gamt
-        gem_msg = f"\n💎 {GEMS[gem]['name']} × {gamt}"
-    p["mine_count"] += 1
-    p["exp_miner"] += 1
+    ore_drops = roll_ore_drop(p["prof_miner"])
+    gem_drops = []
+    if random.randint(1, 100) <= 30:
+        gem_drops = roll_gem_drop(p["prof_miner"])
+    text_lines = ["⛏ *ДОБЫЧА*", ""]
+    total_exp = 0
+    for key, amt, exp in ore_drops:
+        tier = ORE_TIER.get(key, "?")
+        text_lines.append(f"{ORES[key]['name']} ({tier}) × {amt}")
+        p[key] = (p.get(key, 0) or 0) + amt
+        total_exp += exp
+    for key, amt, exp in gem_drops:
+        tier = GEM_TIER.get(key, "?")
+        text_lines.append(f"{GEMS[key]['name']} ({tier}) × {amt}")
+        p[key] = (p.get(key, 0) or 0) + amt
+        total_exp += exp
+    p["exp_miner"] = (p.get("exp_miner", 0) or 0) + total_exp
     new_lvl = prof_level_for_exp(int(p["exp_miner"]))
     level_up = False
     if new_lvl > p["prof_miner"]:
         p["prof_miner"] = new_lvl
         level_up = True
+    p["mine_count"] += 1
     save_player(p)
-    text = f"⛏ *ДОБЫЧА*\n\n{ORES[ore]['name']} × {amt}{gem_msg}\n📈 +1 опыт\n\n⚡ Осталось: {p['energy']}"
+    text_lines.append("")
+    text_lines.append(f"📈 +{total_exp} опыта шахтёра")
+    text_lines.append(f"⚡ Осталось: {p['energy']}")
     if level_up:
-        text += f"\n\n🎉 *Шахтёр → ур. {new_lvl}!*"
+        text_lines.append(f"\n🎉 *Шахтёр → ур. {new_lvl}!*")
+    text = "\n".join(text_lines)
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("⛏ Ещё", callback_data="dig"),
           types.InlineKeyboardButton("🔙 Шахта", callback_data="mine"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
-# ============ АВТО-ШАХТА ============
+# АВТО-ШАХТА
 def process_auto_mine(p):
-    if not p.get("auto_mine_active"):
-        return
+    if not p.get("auto_mine_active"): return
     now = time.time()
     last = p.get("auto_mine_last_collect", 0) or p.get("auto_mine_started", now)
     elapsed = int(now - last)
-    if elapsed < 5:
-        return
+    if elapsed < 5: return
     cycles = min(elapsed // 5, 8640)
     for _ in range(cycles):
-        ore, amt = roll_ore(p["prof_miner"], 2)
-        key = f"auto_mine_{ore}"
-        if key in p:
+        for key, amt, exp in roll_ore_drop(p["prof_miner"]):
             p[key] = (p.get(key, 0) or 0) + amt
-    p["exp_miner"] = (p.get("exp_miner", 0) or 0) + cycles * 0.5
-    new_lvl = prof_level_for_exp(int(p["exp_miner"]))
-    if new_lvl > p["prof_miner"]:
-        p["prof_miner"] = new_lvl
+        if random.randint(1, 100) <= 30:
+            for key, amt, exp in roll_gem_drop(p["prof_miner"]):
+                p[key] = (p.get(key, 0) or 0) + amt
     p["auto_mine_last_collect"] = now
-
-def auto_mine_totals(p):
-    return {
-        "copper": p.get("auto_mine_copper", 0) or 0,
-        "iron": p.get("auto_mine_iron", 0) or 0,
-        "gold": p.get("auto_mine_gold", 0) or 0,
-        "mithril": p.get("auto_mine_mithril", 0) or 0,
-        "gem": p.get("auto_mine_gem", 0) or 0,
-    }
 
 def auto_mine_active_markup():
     m = types.InlineKeyboardMarkup(row_width=1)
@@ -471,57 +427,56 @@ def auto_mine_active_markup():
 
 def auto_mine_start_markup():
     m = types.InlineKeyboardMarkup(row_width=1)
-    m.add(types.InlineKeyboardButton("⛏ Запустить авто-шахту", callback_data="auto_mine_start"))
+    m.add(types.InlineKeyboardButton("⛏ Запустить", callback_data="auto_mine_start"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     return m
 
 def auto_mine_text(p):
-    totals = auto_mine_totals(p)
-    total = sum(totals.values())
+    totals = {}
+    for key in list(ORES.keys()) + list(GEMS.keys()):
+        val = p.get(key, 0) or 0
+        if val > 0:
+            totals[key] = val
     started = p.get("auto_mine_started", 0) or 0
     elapsed_min = int((time.time() - started) / 60) if started else 0
     hours = elapsed_min // 60
     minutes = elapsed_min % 60
-    if total == 0:
-        lines = ["Пока ничего не накопано."]
-    else:
-        lines = []
-        for key, amt in totals.items():
-            if amt > 0:
-                lines.append(f"{ORES[key]['name']}: {amt}")
     bonus = MINER_BONUS.get(p["prof_miner"], 0)
+    lines = []
+    for key, amt in totals.items():
+        if key in ORES:
+            tier = ORE_TIER.get(key, "?")
+            lines.append(f"{ORES[key]['name']} ({tier}): {amt}")
+        else:
+            tier = GEM_TIER.get(key, "?")
+            lines.append(f"{GEMS[key]['name']} ({tier}): {amt}")
     return (
         f"⚙️ *АВТО-ШАХТА*\n{LINE}\n"
         f"⏱ Работает: {hours}ч {minutes}мин\n"
-        f"⛏ Шахтёр: ур.{p['prof_miner']} (+{bonus}%)\n"
-        f"📦 Накопано: {total} шт.\n\n"
-        + "\n".join(lines)
+        f"⛏ Шахтёр: ур.{p['prof_miner']} (+{bonus}%)\n\n"
+        + ("\n".join(lines) if lines else "Пока пусто.")
     )
 
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_menu")
 def auto_mine_menu(c):
     p = get_player(c.from_user.id)
     if p.get("auto_mine_active"):
-        process_auto_mine(p)
-        save_player(p)
+        process_auto_mine(p); save_player(p)
         text = auto_mine_text(p)
         m = auto_mine_active_markup()
     else:
         text = (
             f"⚙️ *АВТО-ШАХТА*\n{LINE}\n"
-            f"Авто-шахта копает руду в фоне.\n\n"
-            f"⚡ Стоимость: 2⚡ / 5 сек\n"
-            f"⏱ Максимум: 12 часов\n"
-            f"🎲 Дроп: -2% к обычному\n"
-            f"📈 Опыт шахтёра: +0.5 / цикл\n\n"
-            f"Готов начать?"
+            f"Копает в фоне (все руды + самоцветы).\n\n"
+            f"⚡ 2⚡ / 5 сек\n"
+            f"⏱ Макс: 12 часов\n"
+            f"📈 Опыт шахтёра капает\n\n"
+            f"Готов?"
         )
         m = auto_mine_start_markup()
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_start")
@@ -531,11 +486,6 @@ def auto_mine_start(c):
     p["auto_mine_active"] = 1
     p["auto_mine_started"] = now
     p["auto_mine_last_collect"] = now
-    p["auto_mine_copper"] = 0
-    p["auto_mine_iron"] = 0
-    p["auto_mine_gold"] = 0
-    p["auto_mine_mithril"] = 0
-    p["auto_mine_gem"] = 0
     save_player(p)
     bot.answer_callback_query(c.id, "⛏ Запущена!")
     auto_mine_menu(c)
@@ -543,63 +493,40 @@ def auto_mine_start(c):
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_check")
 def auto_mine_check(c):
     p = get_player(c.from_user.id)
-    process_auto_mine(p)
-    save_player(p)
+    process_auto_mine(p); save_player(p)
     text = auto_mine_text(p)
     m = auto_mine_active_markup()
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
-    bot.answer_callback_query(c.id, "🔄 Обновлено")
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id, "🔄")
 
-@bot.callback_query_handler(func=lambda c: c.data == "auto_mine_collect")
-def auto_mine_collect(c):
+@bot.callback_query_handler(func=lambda c: c.data in ("auto_mine_collect", "auto_mine_stop"))
+def auto_mine_finish(c):
     p = get_player(c.from_user.id)
     process_auto_mine(p)
-    totals = auto_mine_totals(p)
-    total = sum(totals.values())
-    for key, amt in totals.items():
-        if amt > 0:
-            p[key] = (p.get(key, 0) or 0) + amt
-            p[f"auto_mine_{key}"] = 0
     p["auto_mine_active"] = 0
     p["auto_mine_started"] = 0
     p["auto_mine_last_collect"] = 0
     save_player(p)
-    bot.answer_callback_query(c.id, f"💰 Забрано {total} руды!")
+    msg = "💰 Забрано!" if c.data == "auto_mine_collect" else "❌ Остановлено."
+    bot.answer_callback_query(c.id, msg)
     auto_mine_menu(c)
 
-@bot.callback_query_handler(func=lambda c: c.data == "auto_mine_stop")
-def auto_mine_stop(c):
-    p = get_player(c.from_user.id)
-    process_auto_mine(p)
-    totals = auto_mine_totals(p)
-    total = sum(totals.values())
-    for key, amt in totals.items():
-        if amt > 0:
-            p[key] = (p.get(key, 0) or 0) + amt
-            p[f"auto_mine_{key}"] = 0
-    p["auto_mine_active"] = 0
-    p["auto_mine_started"] = 0
-    p["auto_mine_last_collect"] = 0
-    save_player(p)
-    bot.answer_callback_query(c.id, f"❌ Остановлено. Забрано {total}.")
-    auto_mine_menu(c)
-    
-# ============ ИНВЕНТАРЬ ============
+# ИНВЕНТАРЬ
 @bot.callback_query_handler(func=lambda c: c.data == "inv")
 def inv(c):
     p = get_player(c.from_user.id)
     lines = [f"🎒 *ИНВЕНТАРЬ*\n{LINE}", "🪨 *Руда:*"]
     for k, v in ORES.items():
         if p.get(k, 0) > 0:
-            lines.append(f"  {v['name']}: {p[k]}")
+            tier = ORE_TIER.get(k, "?")
+            lines.append(f"  {v['name']} ({tier}): {p[k]}")
     lines.append("\n💎 *Самоцветы:*")
     for k, v in GEMS.items():
         if p.get(k, 0) > 0:
-            lines.append(f"  {v['name']}: {p[k]}")
+            tier = GEM_TIER.get(k, "?")
+            lines.append(f"  {v['name']} ({tier}): {p[k]}")
     lines.append("\n🌿 *Травы:*")
     for k, v in HERBS.items():
         if p.get(k, 0) > 0:
@@ -615,32 +542,25 @@ def inv(c):
     m.add(types.InlineKeyboardButton("📦 Скрафчено", callback_data="crafted"),
           types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "crafted")
 def crafted_menu(c):
     p = get_player(c.from_user.id)
-    try:
-        items = json.loads(p.get("crafted_items", "[]") or "[]")
-    except:
-        items = []
+    try: items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except: items = []
     if not items:
         text = "📦 *СКРАФЧЕНО*\n\nПока пусто."
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("🔨 Крафт", callback_data="craft"),
               types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
         try:
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                                  reply_markup=m, parse_mode="Markdown")
-        except:
-            pass
-        bot.answer_callback_query(c.id)
-        return
-    text = f"📦 *СКРАФЧЕНО* ({len(items)})\n{LINE}\nВыбери:"
+            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+        except: pass
+        bot.answer_callback_query(c.id); return
+    text = f"📦 *СКРАФЧЕНО* ({len(items)})\n{LINE}"
     m = types.InlineKeyboardMarkup(row_width=1)
     for i, key in enumerate(items):
         name = item_name(key)
@@ -648,23 +568,18 @@ def crafted_menu(c):
         m.add(types.InlineKeyboardButton(f"{name} (+{s})", callback_data=f"item_{i}"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("item_"))
 def item_action(c):
     p = get_player(c.from_user.id)
     idx = int(c.data.split("_")[1])
-    try:
-        items = json.loads(p.get("crafted_items", "[]") or "[]")
-    except:
-        items = []
+    try: items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except: items = []
     if idx >= len(items):
-        bot.answer_callback_query(c.id, "❌ Не найден")
-        return
+        bot.answer_callback_query(c.id, "❌ Не найден"); return
     key = items[idx]
     name = item_name(key)
     s = stat_of(key)
@@ -674,44 +589,36 @@ def item_action(c):
           types.InlineKeyboardButton("💰 Продать", callback_data=f"sell_{idx}"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="crafted"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("equip_"))
 def equip_item(c):
     p = get_player(c.from_user.id)
     idx = int(c.data.split("_")[1])
-    try:
-        items = json.loads(p.get("crafted_items", "[]") or "[]")
-    except:
-        items = []
+    try: items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except: items = []
     if idx >= len(items):
-        bot.answer_callback_query(c.id, "❌ Не найден")
-        return
+        bot.answer_callback_query(c.id, "❌ Не найден"); return
     key = items[idx]
     t = item_type(key)
     if t:
         p[t] = key
         save_player(p)
-        bot.answer_callback_query(c.id, f"✅ Надето!")
+        bot.answer_callback_query(c.id, "✅ Надето!")
     else:
-        bot.answer_callback_query(c.id, "❌ Нельзя надеть")
+        bot.answer_callback_query(c.id, "❌ Нельзя")
     crafted_menu(c)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("sell_"))
 def sell_item(c):
     p = get_player(c.from_user.id)
     idx = int(c.data.split("_")[1])
-    try:
-        items = json.loads(p.get("crafted_items", "[]") or "[]")
-    except:
-        items = []
+    try: items = json.loads(p.get("crafted_items", "[]") or "[]")
+    except: items = []
     if idx >= len(items):
-        bot.answer_callback_query(c.id, "❌ Не найден")
-        return
+        bot.answer_callback_query(c.id, "❌ Не найден"); return
     key = items.pop(idx)
     price = max(50, stat_of(key) * 20)
     p["silver"] += price
@@ -720,10 +627,7 @@ def sell_item(c):
     bot.answer_callback_query(c.id, f"💰 +{price}")
     crafted_menu(c)
 
-# ============ КРАФТ ============
-def get_recipe(key):
-    return RECIPES.get(key)
-
+# КРАФТ
 @bot.callback_query_handler(func=lambda c: c.data == "craft")
 def craft_menu(c):
     p = get_player(c.from_user.id)
@@ -744,10 +648,8 @@ def craft_menu(c):
     )
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("craft_") and c.data.count("_") == 1)
@@ -757,18 +659,15 @@ def craft_category(c):
     text = f"🔨 *{PROFESSIONS[prof]}*\n{LINE}\nВыбери рецепт:"
     m = types.InlineKeyboardMarkup(row_width=1)
     for key, r in RECIPES.items():
-        if r["prof"] != prof:
-            continue
+        if r["prof"] != prof: continue
         can, _ = can_craft(p, key)
         mark = "✅" if can else "🔒"
         m.add(types.InlineKeyboardButton(f"{mark} {r['name']} (ур.{r['level']})",
                                           callback_data=f"recipe_{key}"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="craft"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("recipe_"))
@@ -777,8 +676,7 @@ def recipe_view(c):
     p = get_player(c.from_user.id)
     r = RECIPES.get(key)
     if not r:
-        bot.answer_callback_query(c.id, "❌ Нет рецепта")
-        return
+        bot.answer_callback_query(c.id, "❌ Нет рецепта"); return
     prof = r["prof"]
     lines = [f"🔨 *{r['name']}*", LINE,
              f"Профессия: {PROFESSIONS[prof]}",
@@ -807,10 +705,8 @@ def recipe_view(c):
         m.add(types.InlineKeyboardButton("🔨 Скрафтить", callback_data=f"make_{key}"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data=f"craft_{prof}"))
     try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
-                              reply_markup=m, parse_mode="Markdown")
-    except:
-        pass
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
     bot.answer_callback_query(c.id)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("make_"))
@@ -820,8 +716,7 @@ def make_item(c):
     ok, msg = do_craft(p, key)
     if ok:
         equipped = try_equip_if_better(p, key)
-        if equipped:
-            msg += "\n🔥 Автонадето!"
+        if equipped: msg += "\n🔥 Автонадето!"
     save_player(p)
     bot.answer_callback_query(c.id, msg[:200])
     r = RECIPES.get(key)
