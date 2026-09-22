@@ -6,7 +6,7 @@ import os
 from flask import Flask
 import threading
 
-TOKEN = "8620344298:AAHr_PhXczz08rhQHgd_DpQt13rwIA2XPgA"
+TOKEN = "8620344298:AAHr_PhXczzO8rhQHgd_DpQtl3rwIA2XPgA"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 DB = "rpg.db"
