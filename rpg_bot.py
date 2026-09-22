@@ -10,7 +10,7 @@ from battle import (
 )
 from craft import can_craft, do_craft
 
-TOKEN = "8620344298:AAHr_PhXczz08rhQHgd_DpQt13rwIA2XPgA"
+TOKEN = "8620344298:AAG4CvwDYP6bySc5ZLn5_tJTjpGpOPVHC6U"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
