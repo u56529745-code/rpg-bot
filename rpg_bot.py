@@ -7,7 +7,7 @@ from db import init_db, get_player, save_player, exp_needed
 from battle import calc_player_stats, make_mob, player_turn, mob_turn, roll_herb, roll_ore, battle_text
 from craft import can_craft, do_craft
 
-TOKEN = "8620344298:AAHr_PhXczz08rhQHgd_DpQt13rwIA2XPgA"
+TOKEN = "8620344298:AAGn9P6RbIKO8hOmXSjYxDAJBGa3twmUVyY"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
