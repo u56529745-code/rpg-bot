@@ -18,7 +18,7 @@ LOOT_LIST = ["wolf_fang", "spider_web", "scorpion_sting", "bear_claw",
              "phoenix_feather", "black_moon_shard", "void_fang", "thunder_horn",
              "sky_feather", "shadow_claw", "mini_dragon_scale", "poison_sting",
              "mushroom_skull", "chameleon_slime", "lava_heart", "ghost_raven_feather"]
-
+VOID_LIST = ["void_heart", "void_shard", "void_soul"]
 AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
 
 FIELDS = (
@@ -33,6 +33,7 @@ FIELDS = (
      "crafted_items",
      "auto_mine_active", "auto_mine_started", "auto_mine_last_collect"]
     + ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST
+    + VOID_LIST
     + AUTO_MINE_LIST
 )
 
@@ -67,7 +68,7 @@ def _build_create_sql():
         "auto_mine_started DOUBLE PRECISION DEFAULT 0",
         "auto_mine_last_collect DOUBLE PRECISION DEFAULT 0",
     ]
-    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + VOID_LIST:
         parts.append(f"{r} INTEGER DEFAULT 0")
     for r in AUTO_MINE_LIST:
         parts.append(f"{r} INTEGER DEFAULT 0")
@@ -85,7 +86,7 @@ def init_db():
         ("auto_mine_started", "DOUBLE PRECISION DEFAULT 0"),
         ("auto_mine_last_collect", "DOUBLE PRECISION DEFAULT 0"),
     ]
-    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST:
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + VOID_LIST:
         migrations.append((r, "INTEGER DEFAULT 0"))
     for r in AUTO_MINE_LIST:
         migrations.append((r, "INTEGER DEFAULT 0"))
@@ -112,12 +113,10 @@ def get_player(uid, name="Игрок"):
         c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
         row = c.fetchone()
 
-    # Берём РЕАЛЬНЫЕ имена колонок из БД
     cols = [desc[0] for desc in c.description]
     conn.close()
     result = dict(zip(cols, row))
 
-    # Дозаполняем отсутствующие поля значениями по умолчанию
     defaults = {
         "name": "Игрок", "level": 1, "exp": 0, "hp": 100, "max_hp": 100,
         "silver": 150, "floor": 1, "mob_kill": 0, "keys": 0,
