@@ -6,16 +6,18 @@ from data import (
 )
 
 def craft_exp_for_level(level):
+    """Базовый опыт за крафт (×1.5 увеличен)."""
     if level <= 6:
-        return random.randint(12, 18)
+        base = random.randint(12, 18)
     elif level <= 8:
-        return random.randint(25, 45)
+        base = random.randint(25, 45)
     elif level <= 21:
-        return random.randint(50, 110)
+        base = random.randint(50, 110)
     elif level <= 56:
-        return random.randint(150, 350)
+        base = random.randint(150, 350)
     else:
-        return random.randint(500, 1100)
+        base = random.randint(500, 1100)
+    return int(base * 1.5)
 
 def prof_level_from_exp(exp):
     lvl = 1
@@ -27,6 +29,15 @@ def prof_level_from_exp(exp):
         else:
             break
     return min(lvl, 100)
+
+def get_inventory(p):
+    try:
+        return json.loads(p.get("inventory_items", "[]") or "[]")
+    except:
+        return []
+
+def set_inventory(p, items):
+    p["inventory_items"] = json.dumps(items)
 
 def can_craft(p, recipe_key):
     r = RECIPES[recipe_key]
@@ -53,10 +64,7 @@ def can_craft_void(p, recipe_key):
     if p.get("void_soul", 0) < r["void_soul"]:
         return False, "❌ Нужно 100 Бездонных душ"
     base = r["base_item"]
-    try:
-        items = json.loads(p.get("crafted_items", "[]") or "[]")
-    except:
-        items = []
+    items = get_inventory(p)
     if base not in items and p.get("weapon") != base and p.get("armor") != base and p.get("accessory") != base:
         return False, f"❌ Нужен предмет 100 ур."
     return True, "ok"
@@ -74,17 +82,16 @@ def do_craft(p, recipe_key):
         for herb, amt in r["herb"].items():
             p[herb] -= amt
 
-    # Шанс крафта
     roll = random.randint(1, 100)
     if roll <= 5:
         # КРИТ ×5
         prof = r["prof"]
         exp_gain = craft_exp_for_level(r["level"]) * 5
-        p[f"exp_{prof}"] += exp_gain
-        crafted = json.loads(p.get("crafted_items", "[]") or "[]")
+        p[f"exp_{prof}"] = (p.get(f"exp_{prof}", 0) or 0) + exp_gain
+        inv = get_inventory(p)
         for _ in range(5):
-            crafted.append(recipe_key)
-        p["crafted_items"] = json.dumps(crafted)
+            inv.append(recipe_key)
+        set_inventory(p, inv)
         new_level = prof_level_from_exp(p[f"exp_{prof}"])
         if new_level > p[f"prof_{prof}"]:
             p[f"prof_{prof}"] = new_level
@@ -96,10 +103,10 @@ def do_craft(p, recipe_key):
         # УСПЕХ
         prof = r["prof"]
         exp_gain = craft_exp_for_level(r["level"])
-        p[f"exp_{prof}"] += exp_gain
-        crafted = json.loads(p.get("crafted_items", "[]") or "[]")
-        crafted.append(recipe_key)
-        p["crafted_items"] = json.dumps(crafted)
+        p[f"exp_{prof}"] = (p.get(f"exp_{prof}", 0) or 0) + exp_gain
+        inv = get_inventory(p)
+        inv.append(recipe_key)
+        set_inventory(p, inv)
         new_level = prof_level_from_exp(p[f"exp_{prof}"])
         level_up = False
         if new_level > p[f"prof_{prof}"]:
@@ -117,7 +124,7 @@ def do_craft_void(p, recipe_key):
     p["void_heart"] -= r["void_heart"]
     p["void_shard"] -= r["void_shard"]
     p["void_soul"] -= r["void_soul"]
-    crafted = json.loads(p.get("crafted_items", "[]") or "[]")
-    crafted.append(recipe_key)
-    p["crafted_items"] = json.dumps(crafted)
+    inv = get_inventory(p)
+    inv.append(recipe_key)
+    set_inventory(p, inv)
     return True, f"🖤 {recipe_key} скрафчен!"
