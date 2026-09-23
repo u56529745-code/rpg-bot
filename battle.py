@@ -1,4 +1,5 @@
 import random
+import time
 from data import (
     WEAPONS, ARMORS, ACCESSORIES, MOB_NAMES, MYSTIC_NAMES, BOSS_NAMES,
     HERBS, ORES, GEMS, MOB_LOOT, MINER_BONUS, BUFFS,
@@ -6,8 +7,9 @@ from data import (
     roll_amount, ore_chances, gem_chances, pick_weighted,
 )
 
+DEATH_TIME = 60  # секунд
+
 def get_buff_value(p, buff_key, stat):
-    """Возвращает суммарный бафф от надетого снаряжения."""
     total = 0
     for slot in ("weapon", "armor", "accessory"):
         key = p.get(slot, "none")
@@ -28,7 +30,6 @@ def calc_player_stats(p):
     defense = a["def"] + p["vitality"] * 1
     crit = 5 + p["agility"]
 
-    # Баффы
     dmg += dmg * get_buff_value(p, None, "dmg") / 100
     defense += defense * get_buff_value(p, None, "def") / 100
     crit += get_buff_value(p, None, "crit")
@@ -66,7 +67,6 @@ def make_mob(floor, is_boss=False):
 
     roll = random.randint(1, 100)
     if roll <= 5:
-        # Элитный (×3)
         name = f"🔥 ЭЛИТА {random.choice(MOB_NAMES)}"
         base_hp = int(60 * scale) * 3
         base_dmg = int(8 * scale) * 3
@@ -110,7 +110,6 @@ def mob_turn(p, mob):
     raw = mob["dmg"]
     final = max(1, raw - defense // 2)
 
-    # Пассивка "впитать 50% урона"
     absorb = get_buff_value(p, None, "absorb")
     if absorb > 0 and random.randint(1, 100) <= absorb:
         final = int(final * 0.5)
@@ -119,6 +118,9 @@ def mob_turn(p, mob):
     if dodge:
         return 0, True
     p["hp"] -= final
+    if p["hp"] <= 0:
+        p["hp"] = 0
+        p["death_time"] = time.time()
     return final, False
 
 def roll_herb(floor=1):
@@ -190,3 +192,28 @@ def battle_text(p, mob, player_dmg, is_crit, mob_dmg, dodged_mob, dodged_player)
             lines.append(f"🩸 {mob['name']} нанёс {mob_dmg} урона")
         lines.append(f"❤️ Твой HP: {p['hp']}/{p['max_hp']}")
     return "\n".join(lines)
+
+def is_dead(p):
+    """Проверка: мёртв ли игрок. Возвращает (мёртв, секунд осталось)"""
+    if p.get("hp", 1) > 0:
+        return False, 0
+    dt = p.get("death_time", 0) or 0
+    if dt == 0:
+        return False, 0
+    elapsed = time.time() - dt
+    if elapsed >= DEATH_TIME:
+        return False, 0  # уже восстановился
+    return True, int(DEATH_TIME - elapsed)
+
+def revive_if_possible(p):
+    """Восстанавливает HP, если прошло 60 секунд."""
+    if p.get("hp", 1) > 0:
+        return False
+    dt = p.get("death_time", 0) or 0
+    if dt == 0:
+        return False
+    if time.time() - dt >= DEATH_TIME:
+        p["hp"] = p["max_hp"]
+        p["death_time"] = 0
+        return True
+    return False
