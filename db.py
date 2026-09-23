@@ -22,7 +22,7 @@ VOID_LIST = ["void_heart", "void_shard", "void_soul"]
 AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
 
 FIELDS = (
-    ["uid", "name", "level", "exp", "hp", "max_hp", "silver", "floor",
+    ["uid", "name", "name_changed", "level", "exp", "hp", "max_hp", "silver", "floor",
      "mob_kill", "keys", "strength", "agility", "vitality", "energy_flow",
      "stat_points", "death_time",
      "weapon", "armor", "accessory",
@@ -41,9 +41,21 @@ FIELDS = (
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
+def is_name_set(name):
+    """Проверяет, задано ли у игрока нормальное имя персонажа."""
+    if not name:
+        return False
+    name = str(name).strip()
+    if name == "" or name == "Игрок":
+        return False
+    if name.isdigit():
+        return False
+    return True
+
 def _build_create_sql():
     parts = [
         "uid BIGINT PRIMARY KEY", "name TEXT",
+        "name_changed INTEGER DEFAULT 0",
         "level INTEGER DEFAULT 1", "exp INTEGER DEFAULT 0",
         "hp INTEGER DEFAULT 100", "max_hp INTEGER DEFAULT 100",
         "silver BIGINT DEFAULT 150", "floor INTEGER DEFAULT 1",
@@ -82,6 +94,7 @@ def init_db():
     c.execute(_build_create_sql())
 
     migrations = [
+        ("name_changed", "INTEGER DEFAULT 0"),
         ("prof_miner", "INTEGER DEFAULT 1"),
         ("exp_miner", "INTEGER DEFAULT 0"),
         ("energy_flow", "INTEGER DEFAULT 0"),
@@ -117,25 +130,13 @@ def get_player(uid, name="Игрок"):
         c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
         row = c.fetchone()
 
-    # ФИКС ИМЕНИ: если в БД заглушка "Игрок", а пришло реальное имя — обновляем
-    if name and name != "Игрок":
-        try:
-            c.execute("SELECT name FROM players WHERE uid=%s", (uid,))
-            cur_name = c.fetchone()
-            if cur_name and (not cur_name[0] or cur_name[0] == "Игрок"):
-                c.execute("UPDATE players SET name=%s WHERE uid=%s", (name, uid))
-                conn.commit()
-                c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
-                row = c.fetchone()
-        except Exception:
-            conn.rollback()
-
     cols = [desc[0] for desc in c.description]
     conn.close()
     result = dict(zip(cols, row))
 
     defaults = {
-        "name": "Игрок", "level": 1, "exp": 0, "hp": 100, "max_hp": 100,
+        "name": "Игрок", "name_changed": 0,
+        "level": 1, "exp": 0, "hp": 100, "max_hp": 100,
         "silver": 150, "floor": 1, "mob_kill": 0, "keys": 0,
         "strength": 0, "agility": 0, "vitality": 0, "energy_flow": 0,
         "stat_points": 0, "death_time": 0,
