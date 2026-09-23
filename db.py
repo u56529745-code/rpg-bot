@@ -117,6 +117,19 @@ def get_player(uid, name="Игрок"):
         c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
         row = c.fetchone()
 
+    # ФИКС ИМЕНИ: если в БД заглушка "Игрок", а пришло реальное имя — обновляем
+    if name and name != "Игрок":
+        try:
+            c.execute("SELECT name FROM players WHERE uid=%s", (uid,))
+            cur_name = c.fetchone()
+            if cur_name and (not cur_name[0] or cur_name[0] == "Игрок"):
+                c.execute("UPDATE players SET name=%s WHERE uid=%s", (name, uid))
+                conn.commit()
+                c.execute("SELECT * FROM players WHERE uid=%s", (uid,))
+                row = c.fetchone()
+        except Exception:
+            conn.rollback()
+
     cols = [desc[0] for desc in c.description]
     conn.close()
     result = dict(zip(cols, row))
