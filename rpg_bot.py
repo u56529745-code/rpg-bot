@@ -3,7 +3,7 @@ from telebot import types
 import threading, time, os, random, json
 from flask import Flask
 from data import *
-from db import init_db, get_player, save_player, exp_needed, prof_level_for_exp, get_conn
+from db import init_db, get_player, save_player, exp_needed, prof_level_for_exp, get_conn, is_name_set
 from battle import (
     calc_player_stats, make_mob, player_turn, mob_turn,
     roll_herb, roll_ore_drop, roll_gem_drop, roll_loot, battle_text,
@@ -23,6 +23,10 @@ battles = {}
 clans = {}
 clan_boss = {"hp": 2000000, "max_hp": 2000000, "last_death": 0, "damage": {}}
 world_boss = {"hp": 1000000, "max_hp": 1000000, "last_spawn": 0, "damage": {}}
+
+# Ожидание ввода имени: {uid: "new" / "change"}
+awaiting_name = {}
+
 PET_TYPES = {
     "wolf": {"name": "🐺 Волк", "dmg": 50, "level": 1},
     "dragon": {"name": "🐉 Дракон", "dmg": 150, "level": 3},
@@ -104,6 +108,10 @@ def try_equip_if_better(p, key):
 
 LINE = "━━━━━━━━━━━━━━━━━━"
 
+def safe_name(name):
+    """Экранирует символы Markdown в имени."""
+    return str(name).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+
 def main_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(
@@ -135,7 +143,7 @@ def menu_text(p):
     elif p["level"] >= 5: rank = "D"
     return (
         f"🎮 *ГЛАВНОЕ МЕНЮ*\n{LINE}\n"
-        f"👤 {p['name']}  [{rank}]\n"
+        f"👤 {safe_name(p['name'])}  [{rank}]\n"
         f"⭐ Ур: {p['level']} ({p['exp']}/{exp_needed(p['level'])})\n"
         f"❤️ HP: {p['hp']}/{p['max_hp']}\n"
         f"⚡ Энергия: {p['energy']}/{p['max_energy']}\n"
@@ -145,35 +153,111 @@ def menu_text(p):
         f"🔑 Ключей: {p['keys']}"
     )
 
+# ============ ИМЯ ПЕРСОНАЖА ============
+def ask_name(uid, chat_id, reason="new"):
+    awaiting_name[uid] = reason
+    if reason == "new":
+        text = (
+            f"👋 *Привет!*\n{LINE}\n"
+            f"Придумай имя своему персонажу.\n\n"
+            f"✏️ Напиши имя (от 2 до 20 символов):"
+        )
+    else:
+        text = (
+            f"✏️ *Смена имени*\n{LINE}\n"
+            f"Напиши новое имя (от 2 до 20 символов).\n"
+            f"⚠️ Это можно сделать только 1 раз!"
+        )
+    bot.send_message(chat_id, text, parse_mode="Markdown")
+
+def validate_name(text):
+    if not text:
+        return False, "Имя не может быть пустым."
+    text = text.strip()
+    if len(text) < 2:
+        return False, "Имя слишком короткое (минимум 2 символа)."
+    if len(text) > 20:
+        return False, "Имя слишком длинное (максимум 20 символов)."
+    return True, text
+
 @bot.message_handler(commands=['start'])
 def start(m):
-    p = get_player(m.from_user.id, m.from_user.first_name or "Игрок")
+    uid = m.from_user.id
+    p = get_player(uid, "Игрок")
+
+    # Игрок уже в режиме ввода имени — не перебиваем
+    if uid in awaiting_name:
+        ask_name(uid, m.chat.id, awaiting_name[uid])
+        return
+
+    # Имя не задано → просим
+    if not is_name_set(p.get("name")):
+        ask_name(uid, m.chat.id, "new")
+        return
+
     regen_energy(p)
     save_player(p)
     bot.send_message(m.chat.id, menu_text(p), reply_markup=main_menu(), parse_mode="Markdown")
 
-@bot.callback_query_handler(func=lambda c: c.data == "menu")
-def back_menu(c):
-    p = get_player(c.from_user.id, c.from_user.first_name or "Игрок")
+@bot.message_handler(content_types=['text'])
+def handle_text(m):
+    uid = m.from_user.id
+    if uid not in awaiting_name:
+        # Игрок вне режима — на всякий случай проверим, есть ли имя
+        p = get_player(uid, "Игрок")
+        if not is_name_set(p.get("name")):
+            ask_name(uid, m.chat.id, "new")
+        else:
+            bot.send_message(m.chat.id, "🤔 Не понимаю. Используй /start или кнопки меню.")
+        return
+
+    reason = awaiting_name[uid]
+    ok, result = validate_name(m.text)
+    if not ok:
+        bot.send_message(m.chat.id, f"❌ {result}\nПопробуй ещё:")
+        return
+
+    # Сохраняем имя
+    p = get_player(uid, "Игрок")
+    p["name"] = result
+    if reason == "change":
+        p["name_changed"] = 1
+    save_player(p)
+    del awaiting_name[uid]
+
     regen_energy(p)
     save_player(p)
-    if check_dead(c, p):
-        return
-    try:
-        bot.edit_message_text(menu_text(p), c.message.chat.id, c.message.message_id,
-                              reply_markup=main_menu(), parse_mode="Markdown")
-    except: pass
-    bot.answer_callback_query(c.id)
+    bot.send_message(
+        m.chat.id,
+        f"✅ *Имя сохранено:* {safe_name(result)}\n\n" + menu_text(p),
+        reply_markup=main_menu(),
+        parse_mode="Markdown"
+    )
+
+# ============ ПРОВЕРКА ИМЕНИ ДЛЯ КНОПОК ============
+def require_name(c, p):
+    """Возвращает True, если имя не задано (и мы уже попросили)."""
+    if not is_name_set(p.get("name")):
+        uid = c.from_user.id
+        if uid not in awaiting_name:
+            ask_name(uid, c.message.chat.id, "new")
+        else:
+            bot.answer_callback_query(c.id, "✏️ Сначала введи имя!")
+        return True
+    return False
 
 # ПРОФИЛЬ
 @bot.callback_query_handler(func=lambda c: c.data == "profile")
 def profile(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     w = WEAPONS.get(p["weapon"], WEAPONS["fists"])
     a = ARMORS.get(p["armor"], ARMORS["none"])
     acc = ACCESSORIES.get(p["accessory"], ACCESSORIES["none"])
     text = (
         f"👤 *ПРОФИЛЬ*\n{LINE}\n"
+        f"📛 Имя: {safe_name(p['name'])}\n"
         f"⭐ Ур: {p['level']} ({p['exp']}/{exp_needed(p['level'])})\n"
         f"❤️ HP: {p['hp']}/{p['max_hp']}\n"
         f"⚡ Энергия: {p['energy']}/{p['max_energy']}\n"
@@ -191,10 +275,36 @@ def profile(c):
         f"⚗️ Алхимик: ур.{p['prof_alchemist']}\n"
         f"⛏ Шахтёр: ур.{p['prof_miner']}"
     )
-    m = types.InlineKeyboardMarkup()
+    m = types.InlineKeyboardMarkup(row_width=1)
+    if p.get("name_changed", 0) == 0:
+        m.add(types.InlineKeyboardButton("✏️ Сменить имя (1 раз)", callback_data="name_change"))
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
         bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "name_change")
+def name_change(c):
+    p = get_player(c.from_user.id)
+    if p.get("name_changed", 0) != 0:
+        bot.answer_callback_query(c.id, "❌ Ты уже менял имя!")
+        return
+    bot.answer_callback_query(c.id)
+    ask_name(c.from_user.id, c.message.chat.id, "change")
+
+@bot.callback_query_handler(func=lambda c: c.data == "menu")
+def back_menu(c):
+    p = get_player(c.from_user.id, "Игрок")
+    if require_name(c, p):
+        return
+    regen_energy(p)
+    save_player(p)
+    if check_dead(c, p):
+        return
+    try:
+        bot.edit_message_text(menu_text(p), c.message.chat.id, c.message.message_id,
+                              reply_markup=main_menu(), parse_mode="Markdown")
     except: pass
     bot.answer_callback_query(c.id)
 
@@ -202,6 +312,8 @@ def profile(c):
 @bot.callback_query_handler(func=lambda c: c.data == "stats")
 def stats(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     dmg, defense, crit, hp_bonus = calc_player_stats(p)
     flow = p.get("energy_flow", 0) or 0
     regen = 3 + flow * 0.1
@@ -232,6 +344,8 @@ def stats(c):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("up_"))
 def upgrade(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     if p["stat_points"] <= 0:
         bot.answer_callback_query(c.id, "❌ Нет очков"); return
     s = c.data.split("_")[1]
@@ -253,6 +367,8 @@ def upgrade(c):
 @bot.callback_query_handler(func=lambda c: c.data == "tower")
 def tower(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -280,6 +396,8 @@ def tower(c):
 @bot.callback_query_handler(func=lambda c: c.data == "fight_start")
 def fight_start(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -404,6 +522,8 @@ def fight_run(c):
 @bot.callback_query_handler(func=lambda c: c.data == "use_key")
 def use_key(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -421,6 +541,8 @@ def use_key(c):
 def clan_boss_menu(c):
     global clan_boss
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -453,6 +575,8 @@ def clan_boss_menu(c):
 def clan_boss_hit(c):
     global clan_boss
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -491,6 +615,8 @@ def clan_boss_hit(c):
 @bot.callback_query_handler(func=lambda c: c.data == "mine")
 def mine(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -513,6 +639,8 @@ def mine(c):
 @bot.callback_query_handler(func=lambda c: c.data == "dig")
 def dig(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -632,6 +760,8 @@ def auto_mine_text(p):
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_menu")
 def auto_mine_menu(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -657,6 +787,8 @@ def auto_mine_menu(c):
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_start")
 def auto_mine_start(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -675,6 +807,8 @@ def auto_mine_start(c):
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_check")
 def auto_mine_check(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -689,6 +823,8 @@ def auto_mine_check(c):
 @bot.callback_query_handler(func=lambda c: c.data == "auto_mine_collect")
 def auto_mine_collect(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -712,6 +848,8 @@ def auto_mine_collect(c):
 @bot.callback_query_handler(func=lambda c: c.data == "craft")
 def craft_menu(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -741,6 +879,8 @@ def craft_menu(c):
 def craft_category(c):
     prof = c.data.replace("craft_", "")
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -777,6 +917,8 @@ def craft_category(c):
 def recipe_view(c):
     key = c.data.replace("recipe_", "")
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -842,6 +984,8 @@ def recipe_view(c):
 def make_item(c):
     key = c.data.replace("make_", "")
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -866,6 +1010,8 @@ def make_item(c):
 @bot.callback_query_handler(func=lambda c: c.data == "inv")
 def inv(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     lines = [f"🎒 *ИНВЕНТАРЬ*\n{LINE}", "🪨 *Руда:*"]
     for k, v in ORES.items():
@@ -903,6 +1049,8 @@ def inv(c):
 @bot.callback_query_handler(func=lambda c: c.data == "crafted")
 def crafted_menu(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     try: items = json.loads(p.get("crafted_items", "[]") or "[]")
     except: items = []
     if not items:
@@ -929,6 +1077,8 @@ def crafted_menu(c):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("item_"))
 def item_action(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     idx = int(c.data.split("_")[1])
     try: items = json.loads(p.get("crafted_items", "[]") or "[]")
     except: items = []
@@ -952,6 +1102,8 @@ def item_action(c):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("equip_"))
 def equip_item(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     idx = int(c.data.split("_")[1])
     try: items = json.loads(p.get("crafted_items", "[]") or "[]")
     except: items = []
@@ -970,6 +1122,8 @@ def equip_item(c):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("sell_"))
 def sell_item(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     idx = int(c.data.split("_")[1])
     try: items = json.loads(p.get("crafted_items", "[]") or "[]")
     except: items = []
@@ -986,6 +1140,8 @@ def sell_item(c):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("dis_"))
 def disassemble_item(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     idx = int(c.data.split("_")[1])
     try: items = json.loads(p.get("crafted_items", "[]") or "[]")
     except: items = []
@@ -1002,6 +1158,8 @@ def disassemble_item(c):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("upgrade_"))
 def upgrade_item(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     idx = int(c.data.split("_")[1])
     if p["silver"] < 100000:
         bot.answer_callback_query(c.id, "❌ Нужно 100к"); return
@@ -1025,6 +1183,8 @@ def upgrade_item(c):
 @bot.callback_query_handler(func=lambda c: c.data == "pets")
 def pets_menu(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -1051,6 +1211,8 @@ def pets_menu(c):
 @bot.callback_query_handler(func=lambda c: c.data == "pet_hatch")
 def pet_hatch(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     if check_dead(c, p):
         return
     if p.get("void_shard", 0) < 50:
@@ -1070,6 +1232,8 @@ def pet_hatch(c):
 @bot.callback_query_handler(func=lambda c: c.data == "clans")
 def clans_menu(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -1091,6 +1255,8 @@ def clans_menu(c):
 @bot.callback_query_handler(func=lambda c: c.data == "clan_create")
 def clan_create(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     if check_dead(c, p):
         return
     if p["silver"] < 100000:
@@ -1122,6 +1288,8 @@ def clan_top(c):
 @bot.callback_query_handler(func=lambda c: c.data == "roulette")
 def roulette_menu(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -1143,6 +1311,8 @@ def roulette_menu(c):
 @bot.callback_query_handler(func=lambda c: c.data == "roulette_spin")
 def roulette_spin(c):
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     if check_dead(c, p):
         return
     if p["silver"] < 10000:
@@ -1160,13 +1330,13 @@ def roulette_spin(c):
     bot.answer_callback_query(c.id, msg)
     roulette_menu(c)
 
-# ============ ТОП (ФИКС) ============
+# ============ ТОП ============
 @bot.callback_query_handler(func=lambda c: c.data == "top")
 def top_menu(c):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("SELECT name, silver FROM players ORDER BY silver DESC LIMIT 10")
+        cur.execute("SELECT name, silver FROM players WHERE name IS NOT NULL AND name != 'Игрок' AND name !~ '^[0-9]+$' ORDER BY silver DESC LIMIT 10")
         rows = cur.fetchall()
         conn.close()
         lines = ["🏆 *ТОП-10 ПО СЕРЕБРУ*", LINE, ""]
@@ -1174,8 +1344,7 @@ def top_menu(c):
             lines.append("_Пока никого нет_")
         else:
             for i, (name, silver) in enumerate(rows, 1):
-                safe = str(name).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
-                lines.append(f"{i}. {safe} — {silver:,} 💰")
+                lines.append(f"{i}. {safe_name(name)} — {silver:,} 💰")
         text = "\n".join(lines)
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
@@ -1190,6 +1359,8 @@ def top_menu(c):
 def world_boss_menu(c):
     global world_boss
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
@@ -1222,6 +1393,8 @@ def world_boss_menu(c):
 def world_boss_hit(c):
     global world_boss
     p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
     regen_energy(p)
     if check_dead(c, p):
         return
@@ -1277,7 +1450,7 @@ def world_boss_top(c):
     lines = ["🏆 *ТОП УРОНА*", LINE, ""]
     for i, (uid, dmg) in enumerate(sorted_dmg, 1):
         p = get_player(uid)
-        lines.append(f"{i}. {p['name']} — {dmg:,}")
+        lines.append(f"{i}. {safe_name(p['name'])} — {dmg:,}")
     text = "\n".join(lines)
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="world_boss"))
