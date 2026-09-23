@@ -46,11 +46,9 @@ def regen_energy(p):
         regen = int(cycles * per_cycle)
         p["energy"] = min(p["max_energy"], p["energy"] + regen)
         p["last_energy_time"] = now
-    # Восстановление после смерти
     revive_if_possible(p)
 
 def check_dead(c, p):
-    """Возвращает True, если игрок мёртв. Показывает сообщение."""
     dead, remaining = is_dead(p)
     if dead:
         text = (
@@ -156,7 +154,7 @@ def start(m):
 
 @bot.callback_query_handler(func=lambda c: c.data == "menu")
 def back_menu(c):
-    p = get_player(c.from_user.id)
+    p = get_player(c.from_user.id, c.from_user.first_name or "Игрок")
     regen_energy(p)
     save_player(p)
     if check_dead(c, p):
@@ -250,7 +248,7 @@ def upgrade(c):
     save_player(p)
     bot.answer_callback_query(c.id, "✅ Улучшено!")
     stats(c)
-    
+
 # ============ БАШНЯ ============
 @bot.callback_query_handler(func=lambda c: c.data == "tower")
 def tower(c):
@@ -1022,11 +1020,6 @@ def upgrade_item(c):
     save_player(p)
     bot.answer_callback_query(c.id, msg)
     crafted_menu(c)
-    
-# ============ ИМПОРТ get_conn ============
-# ВАЖНО: добавь в самый верх rpg_bot.py:
-# from db import get_conn
-# Если ещё нет — добавь в импорт.
 
 # ============ ПИТОМЦЫ ============
 @bot.callback_query_handler(func=lambda c: c.data == "pets")
@@ -1177,8 +1170,12 @@ def top_menu(c):
         rows = cur.fetchall()
         conn.close()
         lines = ["🏆 *ТОП-10 ПО СЕРЕБРУ*", LINE, ""]
-        for i, (name, silver) in enumerate(rows, 1):
-            lines.append(f"{i}. {name} — {silver:,}")
+        if not rows:
+            lines.append("_Пока никого нет_")
+        else:
+            for i, (name, silver) in enumerate(rows, 1):
+                safe = str(name).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
+                lines.append(f"{i}. {safe} — {silver:,} 💰")
         text = "\n".join(lines)
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
