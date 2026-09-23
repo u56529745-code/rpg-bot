@@ -21,6 +21,8 @@ LOOT_LIST = ["wolf_fang", "spider_web", "scorpion_sting", "bear_claw",
 VOID_LIST = ["void_heart", "void_shard", "void_soul"]
 AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
 
+MEAT_LIST = ["raw_meat"]
+
 FIELDS = (
     ["uid", "name", "name_changed", "clan",
      "level", "exp", "hp", "max_hp", "silver", "floor",
@@ -32,9 +34,9 @@ FIELDS = (
      "energy", "max_energy", "last_energy_time",
      "hp_small", "hp_big", "str_potion", "def_potion",
      "kills", "mine_count", "boss_kills",
-     "crafted_items",
+     "crafted_items", "inventory_items", "pet_data",
      "auto_mine_active", "auto_mine_started", "auto_mine_last_collect"]
-    + ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST
+    + ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + MEAT_LIST
     + VOID_LIST
     + AUTO_MINE_LIST
 )
@@ -43,7 +45,6 @@ def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
 def is_name_set(name):
-    """Проверяет, задано ли у игрока нормальное имя персонажа."""
     if not name:
         return False
     name = str(name).strip()
@@ -80,11 +81,13 @@ def _build_create_sql():
         "kills INTEGER DEFAULT 0", "mine_count INTEGER DEFAULT 0",
         "boss_kills INTEGER DEFAULT 0",
         "crafted_items TEXT DEFAULT '[]'",
+        "inventory_items TEXT DEFAULT '[]'",
+        "pet_data TEXT DEFAULT '[]'",
         "auto_mine_active INTEGER DEFAULT 0",
         "auto_mine_started DOUBLE PRECISION DEFAULT 0",
         "auto_mine_last_collect DOUBLE PRECISION DEFAULT 0",
     ]
-    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + VOID_LIST:
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + MEAT_LIST + VOID_LIST:
         parts.append(f"{r} INTEGER DEFAULT 0")
     for r in AUTO_MINE_LIST:
         parts.append(f"{r} INTEGER DEFAULT 0")
@@ -98,6 +101,8 @@ def init_db():
     migrations = [
         ("name_changed", "INTEGER DEFAULT 0"),
         ("clan", "TEXT DEFAULT ''"),
+        ("inventory_items", "TEXT DEFAULT '[]'"),
+        ("pet_data", "TEXT DEFAULT '[]'"),
         ("prof_miner", "INTEGER DEFAULT 1"),
         ("exp_miner", "INTEGER DEFAULT 0"),
         ("energy_flow", "INTEGER DEFAULT 0"),
@@ -106,7 +111,7 @@ def init_db():
         ("auto_mine_started", "DOUBLE PRECISION DEFAULT 0"),
         ("auto_mine_last_collect", "DOUBLE PRECISION DEFAULT 0"),
     ]
-    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + VOID_LIST:
+    for r in ORES_LIST + GEMS_LIST + HERBS_LIST + LOOT_LIST + MEAT_LIST + VOID_LIST:
         migrations.append((r, "INTEGER DEFAULT 0"))
     for r in AUTO_MINE_LIST:
         migrations.append((r, "INTEGER DEFAULT 0"))
@@ -118,6 +123,13 @@ def init_db():
         except:
             conn.rollback()
             continue
+
+    # Миграция: crafted_items → inventory_items
+    try:
+        c.execute("UPDATE players SET inventory_items = crafted_items WHERE inventory_items = '[]' AND crafted_items != '[]'")
+        conn.commit()
+    except:
+        conn.rollback()
 
     conn.commit()
     conn.close()
@@ -151,8 +163,9 @@ def get_player(uid, name="Игрок"):
         "energy": 250, "max_energy": 250, "last_energy_time": 0,
         "hp_small": 0, "hp_big": 0, "str_potion": 0, "def_potion": 0,
         "kills": 0, "mine_count": 0, "boss_kills": 0,
-        "crafted_items": "[]",
+        "crafted_items": "[]", "inventory_items": "[]", "pet_data": "[]",
         "auto_mine_active": 0, "auto_mine_started": 0, "auto_mine_last_collect": 0,
+        "raw_meat": 0,
     }
     for f in FIELDS:
         if f not in result:
