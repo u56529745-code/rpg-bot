@@ -1,6 +1,6 @@
-# ============ РУДА (10) ============
 import random
 
+# ============ РУДА (10) ============
 ORES = {
     "copper": {"name": "🟠 Медь", "price": 30, "level": 1},
     "iron": {"name": "⚙️ Железо", "price": 80, "level": 2},
@@ -12,6 +12,18 @@ ORES = {
     "titanite": {"name": "🟣 Титанит", "price": 12000, "level": 8},
     "adamantite": {"name": "🔷 Адамантит", "price": 25000, "level": 9},
     "star_metal": {"name": "🌌 Звёздный металл", "price": 50000, "level": 10},
+}
+
+ORE_TIER = {
+    "copper": "E", "iron": "D", "gold": "C", "mithril": "B", "lead": "A",
+    "silver_ore": "S", "platinum": "SS", "titanite": "SSS",
+    "adamantite": "SSS+", "star_metal": "SSS+",
+}
+
+ORE_EXP = {
+    "copper": 2, "iron": 4, "gold": 8, "mithril": 14, "lead": 24,
+    "silver_ore": 36, "platinum": 50, "titanite": 350,
+    "adamantite": 500, "star_metal": 750,
 }
 
 # ============ САМОЦВЕТЫ (10) ============
@@ -28,7 +40,19 @@ GEMS = {
     "moonstone": {"name": "💎 Лунный камень", "price": 35000, "level": 10},
 }
 
-# ============ ТРАВЫ / РАСТЕНИЯ (20) ============
+GEM_TIER = {
+    "emerald": "E", "sapphire": "D", "amethyst": "C", "topaz": "B",
+    "ruby": "A", "diamond": "S", "garnet": "SS", "tanzanite": "SSS",
+    "onyx": "SSS", "moonstone": "SSS+",
+}
+
+GEM_EXP = {
+    "emerald": 4, "sapphire": 8, "amethyst": 16, "topaz": 28,
+    "ruby": 96, "diamond": 144, "garnet": 200, "tanzanite": 700,
+    "onyx": 900, "moonstone": 1200,
+}
+
+# ============ ТРАВЫ (20) ============
 HERBS = {
     "storm_kelp": {"name": "🌿 Штормовой келп", "price": 50, "level": 1},
     "salt_crystal": {"name": "🪨 Кристалл соли", "price": 100, "level": 2},
@@ -52,63 +76,35 @@ HERBS = {
     "predator_plant": {"name": "🌱 Растение-хищник", "price": 120000, "level": 20},
 }
 
-# ============ ЛУТ С МОБОВ (20) ============
+# ============ ЛУТ (20) ============
 MOB_LOOT = {
-    "wolf_fang": {"name": "🦷 Клык волка", "price": 40, "level": 1},
-    "spider_web": {"name": "🕸 Паутина", "price": 80, "level": 2},
-    "scorpion_sting": {"name": "🦂 Жало скорпиона", "price": 150, "level": 3},
-    "bear_claw": {"name": "🐻 Коготь медведя", "price": 250, "level": 4},
-    "skeleton_bone": {"name": "💀 Кость скелета", "price": 400, "level": 5},
-    "hunter_eye": {"name": "👁 Глаз ночного охотника", "price": 700, "level": 6},
-    "dragon_scale": {"name": "🐉 Чешуя дракона", "price": 1200, "level": 7},
-    "golem_heart": {"name": "❤️ Сердце голема", "price": 2000, "level": 8},
-    "phoenix_feather": {"name": "🦅 Перо феникса", "price": 3500, "level": 9},
-    "black_moon_shard": {"name": "🌑 Осколок чёрной луны", "price": 6000, "level": 10},
-    "void_fang": {"name": "🦷 Клык пустотника", "price": 9000, "level": 11},
-    "thunder_horn": {"name": "📯 Рог громового зверя", "price": 14000, "level": 12},
-    "sky_feather": {"name": "🪶 Перо небесного моба", "price": 20000, "level": 13},
-    "shadow_claw": {"name": "🐾 Коготь теневого волка", "price": 28000, "level": 14},
-    "mini_dragon_scale": {"name": "🐲 Чешуя мини-дракона", "price": 40000, "level": 15},
-    "poison_sting": {"name": "🐝 Жало ядовитой пчелы", "price": 55000, "level": 16},
-    "mushroom_skull": {"name": "💀 Череп грибного монстра", "price": 75000, "level": 17},
-    "chameleon_slime": {"name": "🟢 Слизь-хамелеон", "price": 100000, "level": 18},
-    "lava_heart": {"name": "🔥 Сердце лавового слизня", "price": 140000, "level": 19},
-    "ghost_raven_feather": {"name": "🖤 Чёрное перо ворона-призрака", "price": 200000, "level": 20},
+    "wolf_fang": {"name": "🦷 Клык волка", "price": 40},
+    "spider_web": {"name": "🕸 Паутина", "price": 80},
+    "scorpion_sting": {"name": "🦂 Жало скорпиона", "price": 150},
+    "bear_claw": {"name": "🐻 Коготь медведя", "price": 250},
+    "skeleton_bone": {"name": "💀 Кость скелета", "price": 400},
+    "hunter_eye": {"name": "👁 Глаз ночного охотника", "price": 700},
+    "dragon_scale": {"name": "🐉 Чешуя дракона", "price": 1200},
+    "golem_heart": {"name": "❤️ Сердце голема", "price": 2000},
+    "phoenix_feather": {"name": "🦅 Перо феникса", "price": 3500},
+    "black_moon_shard": {"name": "🌑 Осколок чёрной луны", "price": 6000},
+    "void_fang": {"name": "🦷 Клык пустотника", "price": 9000},
+    "thunder_horn": {"name": "📯 Рог громового зверя", "price": 14000},
+    "sky_feather": {"name": "🪶 Перо небесного моба", "price": 20000},
+    "shadow_claw": {"name": "🐾 Коготь теневого волка", "price": 28000},
+    "mini_dragon_scale": {"name": "🐲 Чешуя мини-дракона", "price": 40000},
+    "poison_sting": {"name": "🐝 Жало ядовитой пчелы", "price": 55000},
+    "mushroom_skull": {"name": "💀 Череп грибного монстра", "price": 75000},
+    "chameleon_slime": {"name": "🟢 Слизь-хамелеон", "price": 100000},
+    "lava_heart": {"name": "🔥 Сердце лавового слизня", "price": 140000},
+    "ghost_raven_feather": {"name": "🖤 Чёрное перо ворона-призрака", "price": 200000},
 }
 
-# ============ МОБЫ ОБЫЧНЫЕ (40) ============
-MOB_NAMES = [
-    "🐀 Крыса", "🦇 Летучая мышь", "🐺 Волк", "🐗 Кабан", "🐻 Медведь",
-    "🦂 Скорпион", "🕷 Паук", "🐍 Змея", "🦊 Лиса", "🐆 Леопард",
-    "🐊 Крокодил", "🦅 Орёл", "🐉 Дракончик", "👹 Гоблин", "🧟 Зомби",
-    "🦌 Олень", "🐗 Дикий кабан", "🦍 Горилла", "🐅 Тигр", "🦏 Носорог",
-    "👾 Лунный пожиратель", "💎 Кристальный голем", "🦊 Теневой лис",
-    "🍄 Грибной рыцарь", "🌌 Пустотный скиталец", "📦 Мимик-сундук",
-    "🏮 Болотный фонарщик", "🪞 Зеркальный двойник", "🪱 Пещерный пожиратель",
-    "🔥 Огненный ворон", "❄️ Ледяная ведьма", "🏘 Деревенька-бродяга",
-    "🦋 Эндер-бабочка", "🎭 Кукольник", "🌸 Глазастый цветок",
-    "🌩 Грозовой олень", "🐉 Костяной дракончик", "🏜 Песочный призрак",
-    "👑 Король слизней", "🌑 Чёрная луна",
-]
+# ============ РЕСУРСЫ БЕЗДНЫ ============
+VOID_HEART = {"name": "🖤 Сердце бездны", "price": 5000000}
+VOID_SHARD = {"name": "💠 Осколок бездны", "price": 500000}
+VOID_SOUL = {"name": "🕯 Бездонная душа", "price": 100000}
 
-# ============ МИСТИЧЕСКИЕ (5) ============
-MYSTIC_NAMES = [
-    "🌟 Мистический волк", "🌟 Мистический медведь", "🌟 Мистический дракон",
-    "🌟 Мистический феникс", "🌟 Мистический единорог",
-]
-
-# ============ БОССЫ (25) ============
-BOSS_NAMES = [
-    "👑 Владыка этажа", "💀 Король мертвых", "🐲 Древний дракон",
-    "👺 Повелитель демонов", "🧙 Архимаг", "🦁 Царь зверей",
-    "🐙 Кракен", "🔥 Владыка огня", "❄️ Ледяной король",
-    "⚡ Повелитель гроз", "🌑 Тёмный лорд", "🕷 Королева пауков",
-    "🐉 Древний вирм", "👹 Демон бездны", "💎 Кристальный титан",
-    "🌪 Владыка ветров", "🌊 Морской царь", "🏔 Горный гигант",
-    "🦅 Владыка небес", "🐺 Альфа-волк", "🌋 Огненный голем",
-    "👻 Король призраков", "🌌 Владыка пустоты", "💀 Смерть",
-    "👑 Верховный бог",
-]
 # ============ ОРУЖИЕ (23) ============
 WEAPONS = {
     "fists": {"name": "👊 Кулаки", "dmg": 5, "level": 0},
@@ -137,6 +133,11 @@ WEAPONS = {
     "living_axe": {"name": "🪓 Топор с живым лезвием", "dmg": 4800, "level": 70},
     "eternal_hoe": {"name": "🌾 Мотыга вечной жатвы", "dmg": 5800, "level": 85},
     "legend": {"name": "⚔️ Легендарный клинок", "dmg": 7000, "level": 100},
+    # СЕКРЕТНЫЕ (с боссов)
+    "demon_mace": {"name": "🔨 Булава кровавого демона", "dmg": 35000, "level": 0, "buff": "crit25"},
+    "dragon_katana": {"name": "🗡 Катана дракона", "dmg": 38000, "level": 0, "buff": "dmg25"},
+    # БЕЗДНА
+    "void_blade": {"name": "⚔️ Клинок бездны", "dmg": 40000, "level": 0, "buff": "agi25", "void": True},
 }
 
 # ============ БРОНЯ (20) ============
@@ -150,7 +151,7 @@ ARMORS = {
     "moon_knight": {"name": "🌙 Доспехи лунного рыцаря", "def": 60, "level": 16},
     "kraken_shell": {"name": "🐙 Броня из панцирей кракена", "def": 85, "level": 20},
     "forest_spirit": {"name": "🌲 Комплект лесного духа", "def": 115, "level": 25},
-    "void_armor": {"name": "⚫ Доспехи пустотника", "def": 150, "level": 30},
+    "void_armor_old": {"name": "⚫ Доспехи пустотника", "def": 150, "level": 30},
     "crystal_golem": {"name": "💎 Броня кристального голема", "def": 195, "level": 35},
     "thunder_guard": {"name": "⚡ Комплект грозового стража", "def": 250, "level": 40},
     "ice_demon": {"name": "❄️ Доспехи ледяного демона", "def": 320, "level": 45},
@@ -161,6 +162,10 @@ ARMORS = {
     "sky_smith": {"name": "☁️ Доспехи небесного кузнеца", "def": 980, "level": 80},
     "dead_forest": {"name": "💀 Доспехи мёртвого леса", "def": 1250, "level": 90},
     "mirror_knight": {"name": "🪞 Броня зеркального рыцаря", "def": 1600, "level": 100},
+    # СЕКРЕТНАЯ (с боссов)
+    "god_flesh": {"name": "🩸 Броня из плоти бога", "def": 4000, "level": 0, "buff": "hp50_def30_heal10"},
+    # БЕЗДНА
+    "void_armor": {"name": "⚫ Броня бездны", "def": 4400, "level": 0, "buff": "hp60_def40_absorb20", "void": True},
 }
 
 # ============ БИЖУТЕРИЯ (20) ============
@@ -185,6 +190,11 @@ ACCESSORIES = {
     "lost_soul_amulet": {"name": "👻 Амулет потерянной души", "bonus": 1850, "level": 80},
     "night_flower_pendant": {"name": "🌸 Кулон цветка ночи", "bonus": 2400, "level": 90},
     "forgotten_god": {"name": "🏛 Медальон забытого бога", "bonus": 3200, "level": 100},
+    # СЕКРЕТНЫЕ (с боссов)
+    "eternity_ring": {"name": "💍 Кольцо вечности", "bonus": 6000, "level": 0, "buff": "exp25"},
+    "demon_crown": {"name": "👑 Корона демона", "bonus": 7000, "level": 0, "buff": "dmg50_agi15"},
+    # БЕЗДНА
+    "void_amulet": {"name": "📿 Амулет бездны", "bonus": 6500, "level": 0, "buff": "silver25", "void": True},
 }
 
 # ============ ЗЕЛЬЯ (20) ============
@@ -223,9 +233,9 @@ RECIPES_WEAPONS = {
     "scythe_moon": {"mithril": 3, "topaz": 2, "gold": 5},
     "parasite_pick": {"mithril": 4, "topaz": 3},
     "twisted_shovel": {"mithril": 5, "ruby": 2, "lead": 3},
-    "soul_hoe": {"lead": 5, "ruby": 3, "silver": 2},
-    "thunder_axe": {"silver": 4, "ruby": 4, "diamond": 2},
-    "void_pick": {"platinum": 5, "diamond": 3, "silver": 4},
+    "soul_hoe": {"lead": 5, "ruby": 3, "silver_ore": 2},
+    "thunder_axe": {"silver_ore": 4, "ruby": 4, "diamond": 2},
+    "void_pick": {"platinum": 5, "diamond": 3, "silver_ore": 4},
     "ice_drill": {"platinum": 4, "garnet": 3, "diamond": 3},
     "meteor_hammer": {"platinum": 5, "tanzanite": 3, "garnet": 4},
     "root_staff": {"titanite": 5, "onyx": 3, "tanzanite": 3},
@@ -250,8 +260,8 @@ RECIPES_ARMORS = {
     "moon_knight": {"mithril": 4, "topaz": 2, "gold": 5},
     "kraken_shell": {"mithril": 5, "ruby": 3, "topaz": 3},
     "forest_spirit": {"lead": 5, "ruby": 2, "emerald": 4},
-    "void_armor": {"lead": 4, "diamond": 3, "silver": 3},
-    "crystal_golem": {"silver": 5, "diamond": 4, "garnet": 2},
+    "void_armor_old": {"lead": 4, "diamond": 3, "silver_ore": 3},
+    "crystal_golem": {"silver_ore": 5, "diamond": 4, "garnet": 2},
     "thunder_guard": {"platinum": 4, "garnet": 4, "diamond": 3},
     "ice_demon": {"platinum": 5, "tanzanite": 3, "garnet": 4},
     "mushroom_king": {"platinum": 4, "onyx": 3, "tanzanite": 3},
@@ -272,8 +282,8 @@ RECIPES_ACCESSORIES = {
     "moon_necklace": {"mithril": 4, "topaz": 3},
     "invisible_ring": {"lead": 4, "ruby": 2, "topaz": 3},
     "ender_earrings": {"lead": 5, "ruby": 4},
-    "living_bracelet": {"silver": 5, "diamond": 3},
-    "dragon_pendant": {"silver": 4, "garnet": 4, "diamond": 3},
+    "living_bracelet": {"silver_ore": 5, "diamond": 3},
+    "dragon_pendant": {"silver_ore": 4, "garnet": 4, "diamond": 3},
     "time_ring": {"platinum": 5, "tanzanite": 3, "garnet": 4},
     "mushroom_crown": {"platinum": 4, "onyx": 4, "tanzanite": 3},
     "black_sun_amulet": {"titanite": 5, "onyx": 4, "garnet": 4},
@@ -310,7 +320,14 @@ RECIPES_POTIONS = {
     "random_effect": {"predator_plant": 3, "star_clover": 2},
 }
 
-# ============ СТАРЫЕ РЕЦЕПТЫ (для совместимости) ============
+# ============ РЕЦЕПТЫ БЕЗДНЫ ============
+RECIPES_VOID = {
+    "void_blade": {"void_heart": 1, "void_shard": 50, "void_soul": 100, "base_item": "legend"},
+    "void_armor": {"void_heart": 1, "void_shard": 50, "void_soul": 100, "base_item": "mirror_knight"},
+    "void_amulet": {"void_heart": 1, "void_shard": 50, "void_soul": 100, "base_item": "forgotten_god"},
+}
+
+# ============ ОБЩИЕ РЕЦЕПТЫ ============
 RECIPES = {}
 for k, v in RECIPES_WEAPONS.items():
     if k in WEAPONS:
@@ -334,7 +351,7 @@ PROFESSIONS = {
     "miner": "⛏ Шахтёр",
 }
 
-# ============ ОПЫТ ПРОФЕССИЙ (100 уровней) ============
+# ============ ОПЫТ ПРОФЕССИЙ ============
 def prof_exp_needed(level):
     return 50 + level * 20
 
@@ -344,7 +361,7 @@ def total_prof_exp(level):
         total += prof_exp_needed(i)
     return total
 
-# ============ БОНУС ШАХТЁРА (100 уровней) ============
+# ============ БОНУС ШАХТЁРА ============
 def miner_bonus(level):
     if level <= 10:
         return level
@@ -357,63 +374,81 @@ def miner_bonus(level):
 
 MINER_BONUS = {i: miner_bonus(i) for i in range(1, 101)}
 
-# ============ ТИРЫ РУДЫ ============
-ORE_TIER = {
-    "copper": "E",
-    "iron": "D",
-    "gold": "C",
-    "mithril": "B",
-    "lead": "A",
-    "silver_ore": "S",
-    "platinum": "SS",
-    "titanite": "SSS",
-    "adamantite": "SSS+",
-    "star_metal": "SSS+",
+# ============ МОБЫ ============
+MOB_NAMES = [
+    "🐀 Крыса", "🦇 Летучая мышь", "🐺 Волк", "🐗 Кабан", "🐻 Медведь",
+    "🦂 Скорпион", "🕷 Паук", "🐍 Змея", "🦊 Лиса", "🐆 Леопард",
+    "🐊 Крокодил", "🦅 Орёл", "🐉 Дракончик", "👹 Гоблин", "🧟 Зомби",
+    "🦌 Олень", "🐗 Дикий кабан", "🦍 Горилла", "🐅 Тигр", "🦏 Носорог",
+    "👾 Лунный пожиратель", "💎 Кристальный голем", "🦊 Теневой лис",
+    "🍄 Грибной рыцарь", "🌌 Пустотный скиталец", "📦 Мимик-сундук",
+    "🏮 Болотный фонарщик", "🪞 Зеркальный двойник", "🪱 Пещерный пожиратель",
+    "🔥 Огненный ворон", "❄️ Ледяная ведьма", "🏘 Деревенька-бродяга",
+    "🦋 Эндер-бабочка", "🎭 Кукольник", "🌸 Глазастый цветок",
+    "🌩 Грозовой олень", "🐉 Костяной дракончик", "🏜 Песочный призрак",
+    "👑 Король слизней", "🌑 Чёрная луна",
+]
+
+MYSTIC_NAMES = [
+    "🌟 Мистический волк", "🌟 Мистический медведь", "🌟 Мистический дракон",
+    "🌟 Мистический феникс", "🌟 Мистический единорог",
+]
+
+BOSS_NAMES = [
+    "👑 Владыка этажа", "💀 Король мертвых", "🐲 Древний дракон",
+    "👺 Повелитель демонов", "🧙 Архимаг", "🦁 Царь зверей",
+    "🐙 Кракен", "🔥 Владыка огня", "❄️ Ледяной король",
+    "⚡ Повелитель гроз", "🌑 Тёмный лорд", "🕷 Королева пауков",
+    "🐉 Древний вирм", "👹 Демон бездны", "💎 Кристальный титан",
+    "🌪 Владыка ветров", "🌊 Морской царь", "🏔 Горный гигант",
+    "🦅 Владыка небес", "🐺 Альфа-волк", "🌋 Огненный голем",
+    "👻 Король призраков", "🌌 Владыка пустоты", "💀 Смерть",
+    "👑 Верховный бог",
+]
+
+# ============ НАГРАДЫ ЗА ЭТАЖ ============
+FLOOR_REWARDS = {
+    1: {"silver": 500, "exp": 100}, 2: {"silver": 1000, "exp": 200},
+    3: {"silver": 2000, "exp": 400}, 4: {"silver": 4000, "exp": 800},
+    5: {"silver": 8000, "exp": 1600}, 6: {"silver": 16000, "exp": 3200},
+    7: {"silver": 32000, "exp": 6400}, 8: {"silver": 64000, "exp": 12800},
+    9: {"silver": 128000, "exp": 25600}, 10: {"silver": 256000, "exp": 51200},
 }
 
-# ============ ТИРЫ САМОЦВЕТОВ ============
-GEM_TIER = {
-    "emerald": "E",
-    "sapphire": "D",
-    "amethyst": "C",
-    "topaz": "B",
-    "ruby": "A",
-    "diamond": "S",
-    "garnet": "SS",
-    "tanzanite": "SSS",
-    "onyx": "SSS",
-    "moonstone": "SSS+",
-}
+# ============ ШАНСЫ РЕСУРСОВ ============
+def ore_chances(miner_level):
+    if miner_level <= 10:
+        return {"copper": 70, "iron": 25, "gold": 5}
+    elif miner_level <= 30:
+        return {"copper": 50, "iron": 30, "gold": 15, "mithril": 5}
+    elif miner_level <= 60:
+        return {"copper": 30, "iron": 30, "gold": 25, "mithril": 10, "lead": 5}
+    elif miner_level <= 90:
+        return {"copper": 15, "iron": 25, "gold": 25, "mithril": 15, "lead": 12, "silver_ore": 6, "platinum": 2}
+    else:
+        return {"copper": 8, "iron": 17, "gold": 25, "mithril": 18, "lead": 15, "silver_ore": 10, "platinum": 5, "titanite": 1.5, "adamantite": 0.4, "star_metal": 0.1}
 
-# ============ ОПЫТ ЗА ЕДИНИЦУ РУДЫ ============
-ORE_EXP = {
-    "copper": 2,
-    "iron": 4,
-    "gold": 8,
-    "mithril": 14,
-    "lead": 24,
-    "silver_ore": 36,
-    "platinum": 50,
-    "titanite": 350,
-    "adamantite": 500,
-    "star_metal": 750,
-}
+def gem_chances(miner_level):
+    if miner_level <= 10:
+        return {"emerald": 70, "sapphire": 25, "amethyst": 5}
+    elif miner_level <= 30:
+        return {"emerald": 50, "sapphire": 30, "amethyst": 15, "topaz": 5}
+    elif miner_level <= 60:
+        return {"emerald": 30, "sapphire": 30, "amethyst": 25, "topaz": 10, "ruby": 5}
+    elif miner_level <= 90:
+        return {"emerald": 15, "sapphire": 25, "amethyst": 25, "topaz": 15, "ruby": 12, "diamond": 6, "garnet": 2}
+    else:
+        return {"emerald": 8, "sapphire": 17, "amethyst": 25, "topaz": 18, "ruby": 15, "diamond": 10, "garnet": 5, "tanzanite": 1.5, "onyx": 0.4, "moonstone": 0.1}
 
-# ============ ОПЫТ ЗА ЕДИНИЦУ САМОЦВЕТА ============
-GEM_EXP = {
-    "emerald": 4,
-    "sapphire": 8,
-    "amethyst": 16,
-    "topaz": 28,
-    "ruby": 96,
-    "diamond": 144,
-    "garnet": 200,
-    "tanzanite": 700,
-    "onyx": 900,
-    "moonstone": 1200,
-}
+def pick_weighted(chances):
+    roll = random.random() * 100
+    acc = 0
+    for key, weight in chances.items():
+        acc += weight
+        if roll < acc:
+            return key
+    return list(chances.keys())[-1]
 
-# ============ ШАНСЫ КОЛИЧЕСТВА ============
 def roll_amount():
     roll = random.random() * 100
     if roll < 73.5:
@@ -422,73 +457,20 @@ def roll_amount():
         return random.randint(6, 10)
     elif roll < 98.5:
         return random.randint(11, 20)
-    elif roll < 100.0:
+    elif roll < 99.4:
         return random.randint(21, 35)
-    else:
-        return 50
+    elif roll < 99.9:
+        return random.randint(36, 49)
+    return 50
 
-# ============ ШАНСЫ РЕСУРСОВ ПО УРОВНЮ ШАХТЁРА ============
-def ore_chances(miner_level):
-    if miner_level <= 10:
-        return {
-            "copper": 70, "iron": 25, "gold": 5,
-        }
-    elif miner_level <= 30:
-        return {
-            "copper": 50, "iron": 30, "gold": 15, "mithril": 5,
-        }
-    elif miner_level <= 60:
-        return {
-            "copper": 30, "iron": 30, "gold": 25, "mithril": 10,
-            "lead": 5,
-        }
-    elif miner_level <= 90:
-        return {
-            "copper": 15, "iron": 25, "gold": 25, "mithril": 15,
-            "lead": 12, "silver_ore": 6, "platinum": 2,
-        }
-    else:
-        return {
-            "copper": 8, "iron": 17, "gold": 25, "mithril": 18,
-            "lead": 15, "silver_ore": 10, "platinum": 5,
-            "titanite": 1.5, "adamantite": 0.4, "star_metal": 0.1,
-        }
-
-def gem_chances(miner_level):
-    if miner_level <= 10:
-        return {
-            "emerald": 70, "sapphire": 25, "amethyst": 5,
-        }
-    elif miner_level <= 30:
-        return {
-            "emerald": 50, "sapphire": 30, "amethyst": 15, "topaz": 5,
-        }
-    elif miner_level <= 60:
-        return {
-            "emerald": 30, "sapphire": 30, "amethyst": 25, "topaz": 10,
-            "ruby": 5,
-        }
-    elif miner_level <= 90:
-        return {
-            "emerald": 15, "sapphire": 25, "amethyst": 25, "topaz": 15,
-            "ruby": 12, "diamond": 6, "garnet": 2,
-        }
-    else:
-        return {
-            "emerald": 8, "sapphire": 17, "amethyst": 25, "topaz": 18,
-            "ruby": 15, "diamond": 10, "garnet": 5,
-            "tanzanite": 1.5, "onyx": 0.4, "moonstone": 0.1,
-        }
-
-# ============ ВЕСА ДЛЯ ROLL_ORE / ROLL_GEM ============
-import random as _random
-
-def pick_weighted(chances):
-    """Выбирает ключ по весам."""
-    roll = _random.random() * 100
-    acc = 0
-    for key, weight in chances.items():
-        acc += weight
-        if roll < acc:
-            return key
-    return list(chances.keys())[-1]
+# ============ ТИРЫ ДЛЯ БАФФОВ ============
+BUFFS = {
+    "crit25": {"name": "+25% крит", "crit": 25},
+    "dmg25": {"name": "+25% урон", "dmg": 25},
+    "agi25": {"name": "+25% ловкость", "agi": 25},
+    "hp50_def30_heal10": {"name": "+50% HP, +30% защ, 10% хил", "hp": 50, "def": 30, "heal": 10},
+    "hp60_def40_absorb20": {"name": "+60% HP, +40% защ, 20% впит", "hp": 60, "def": 40, "absorb": 20},
+    "exp25": {"name": "+25% опыт", "exp": 25},
+    "silver25": {"name": "+25% серебро", "silver": 25},
+    "dmg50_agi15": {"name": "+50% урон, +15% ловк", "dmg": 50, "agi": 15},
+}
