@@ -20,7 +20,6 @@ def index():
     return "ok"
 
 battles = {}
-clans = {}
 clan_boss = {"hp": 2000000, "max_hp": 2000000, "last_death": 0, "damage": {}}
 world_boss = {"hp": 1000000, "max_hp": 1000000, "last_spawn": 0, "damage": {}}
 
@@ -60,7 +59,7 @@ def check_dead(c, p):
             f"⏱ Восстановление через *{remaining} сек*\n\n"
             f"Пока недоступно:\n"
             f"🏰 Башня, ⛏ Шахта, ⚙️ Авто-шахта,\n"
-            f"🔨 Крафт, 🐾 Питомцы, 👥 Кланы,\n"
+            f"🔨 Крафт, 🐾 Питомцы, 🐉 Клановый босс,\n"
             f"🎰 Рулетка, 🌍 Мировой босс\n\n"
             f"✅ Доступно: профиль, инвентарь, топ"
         )
@@ -109,7 +108,6 @@ def try_equip_if_better(p, key):
 LINE = "━━━━━━━━━━━━━━━━━━"
 
 def safe_name(name):
-    """Экранирует символы Markdown в имени."""
     return str(name).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 
 def main_menu():
@@ -124,9 +122,9 @@ def main_menu():
         types.InlineKeyboardButton("📦 Скрафчено", callback_data="crafted"),
         types.InlineKeyboardButton("⚙️ Авто-шахта", callback_data="auto_mine_menu"),
         types.InlineKeyboardButton("🌍 Мировой босс", callback_data="world_boss"),
+        types.InlineKeyboardButton("🐉 Клановый босс", callback_data="clan_boss"),
         types.InlineKeyboardButton("🎰 Рулетка", callback_data="roulette"),
         types.InlineKeyboardButton("🐾 Питомцы", callback_data="pets"),
-        types.InlineKeyboardButton("👥 Кланы", callback_data="clans"),
         types.InlineKeyboardButton("🏆 Топ", callback_data="top"),
     )
     return m
@@ -141,9 +139,10 @@ def menu_text(p):
     elif p["level"] >= 15: rank = "B"
     elif p["level"] >= 10: rank = "C"
     elif p["level"] >= 5: rank = "D"
+    clan_str = f"\n🛡 Клан: {safe_name(p['clan'])}" if p.get("clan") else ""
     return (
         f"🎮 *ГЛАВНОЕ МЕНЮ*\n{LINE}\n"
-        f"👤 {safe_name(p['name'])}  [{rank}]\n"
+        f"👤 {safe_name(p['name'])}  [{rank}]{clan_str}\n"
         f"⭐ Ур: {p['level']} ({p['exp']}/{exp_needed(p['level'])})\n"
         f"❤️ HP: {p['hp']}/{p['max_hp']}\n"
         f"⚡ Энергия: {p['energy']}/{p['max_energy']}\n"
@@ -185,12 +184,10 @@ def start(m):
     uid = m.from_user.id
     p = get_player(uid, "Игрок")
 
-    # Игрок уже в режиме ввода имени — не перебиваем
     if uid in awaiting_name:
         ask_name(uid, m.chat.id, awaiting_name[uid])
         return
 
-    # Имя не задано → просим
     if not is_name_set(p.get("name")):
         ask_name(uid, m.chat.id, "new")
         return
@@ -203,7 +200,6 @@ def start(m):
 def handle_text(m):
     uid = m.from_user.id
     if uid not in awaiting_name:
-        # Игрок вне режима — на всякий случай проверим, есть ли имя
         p = get_player(uid, "Игрок")
         if not is_name_set(p.get("name")):
             ask_name(uid, m.chat.id, "new")
@@ -217,7 +213,6 @@ def handle_text(m):
         bot.send_message(m.chat.id, f"❌ {result}\nПопробуй ещё:")
         return
 
-    # Сохраняем имя
     p = get_player(uid, "Игрок")
     p["name"] = result
     if reason == "change":
@@ -234,9 +229,7 @@ def handle_text(m):
         parse_mode="Markdown"
     )
 
-# ============ ПРОВЕРКА ИМЕНИ ДЛЯ КНОПОК ============
 def require_name(c, p):
-    """Возвращает True, если имя не задано (и мы уже попросили)."""
     if not is_name_set(p.get("name")):
         uid = c.from_user.id
         if uid not in awaiting_name:
@@ -255,9 +248,11 @@ def profile(c):
     w = WEAPONS.get(p["weapon"], WEAPONS["fists"])
     a = ARMORS.get(p["armor"], ARMORS["none"])
     acc = ACCESSORIES.get(p["accessory"], ACCESSORIES["none"])
+    clan_str = f"🛡 Клан: {safe_name(p['clan'])}\n" if p.get("clan") else "🛡 Клан: —\n"
     text = (
         f"👤 *ПРОФИЛЬ*\n{LINE}\n"
         f"📛 Имя: {safe_name(p['name'])}\n"
+        f"{clan_str}"
         f"⭐ Ур: {p['level']} ({p['exp']}/{exp_needed(p['level'])})\n"
         f"❤️ HP: {p['hp']}/{p['max_hp']}\n"
         f"⚡ Энергия: {p['energy']}/{p['max_energy']}\n"
@@ -490,7 +485,7 @@ def fight_turn(c):
             f"⏱ Восстановление через *60 сек*\n\n"
             f"Пока недоступно:\n"
             f"🏰 Башня, ⛏ Шахта, ⚙️ Авто-шахта,\n"
-            f"🔨 Крафт, 🐾 Питомцы, 👥 Кланы,\n"
+            f"🔨 Крафт, 🐾 Питомцы, 🐉 Клановый босс,\n"
             f"🎰 Рулетка, 🌍 Мировой босс\n\n"
             f"✅ Доступно: профиль, инвентарь, топ"
         )
@@ -546,6 +541,30 @@ def clan_boss_menu(c):
     regen_energy(p); save_player(p)
     if check_dead(c, p):
         return
+
+    # Проверка: есть ли у игрока клан
+    if not p.get("clan"):
+        text = (
+            f"🐉 *КЛАНОВЫЙ БОСС*\n{LINE}\n"
+            f"⛔ У тебя нет клана!\n\n"
+            f"Чтобы сразиться с клановым боссом,\n"
+            f"сначала создай клан.\n\n"
+            f"💰 Стоимость: 100 000 серебра\n"
+            f"💼 У тебя: {p['silver']:,}"
+        )
+        m = types.InlineKeyboardMarkup(row_width=1)
+        if p["silver"] >= 100000:
+            m.add(types.InlineKeyboardButton("🏰 Создать клан (100к)", callback_data="clan_create"))
+        else:
+            m.add(types.InlineKeyboardButton("❌ Не хватает серебра", callback_data="clan_need_money"))
+        m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
+        try:
+            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+        except: pass
+        bot.answer_callback_query(c.id)
+        return
+
+    # Есть клан — показываем босса
     now = time.time()
     if clan_boss["hp"] <= 0:
         if now - clan_boss["last_death"] < 300:
@@ -557,6 +576,7 @@ def clan_boss_menu(c):
             clan_boss["damage"] = {}
     text = (
         f"🐉 *КЛАНОВЫЙ БОСС*\n{LINE}\n"
+        f"🛡 Клан: {safe_name(p['clan'])}\n\n"
         f"❤️ HP: {clan_boss['hp']:,}/{clan_boss['max_hp']:,}\n"
         f"⚔️ Урон: 1000\n"
         f"🎯 Ловкость: 15%\n\n"
@@ -565,17 +585,43 @@ def clan_boss_menu(c):
     )
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("⚔️ Атаковать (10⚡)", callback_data="clan_boss_hit"))
-    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="clans"))
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
     try:
         bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
     except: pass
     bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "clan_need_money")
+def clan_need_money(c):
+    bot.answer_callback_query(c.id, "❌ Нужно 100 000 серебра")
+
+@bot.callback_query_handler(func=lambda c: c.data == "clan_create")
+def clan_create(c):
+    p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
+    if check_dead(c, p):
+        return
+    if p.get("clan"):
+        bot.answer_callback_query(c.id, "❌ У тебя уже есть клан!")
+        return
+    if p["silver"] < 100000:
+        bot.answer_callback_query(c.id, "❌ Нужно 100к"); return
+    p["silver"] -= 100000
+    clan_name = f"Клан_{p['name']}"
+    p["clan"] = clan_name
+    save_player(p)
+    bot.answer_callback_query(c.id, f"✅ Клан {clan_name} создан!")
+    clan_boss_menu(c)
 
 @bot.callback_query_handler(func=lambda c: c.data == "clan_boss_hit")
 def clan_boss_hit(c):
     global clan_boss
     p = get_player(c.from_user.id)
     if require_name(c, p):
+        return
+    if not p.get("clan"):
+        bot.answer_callback_query(c.id, "❌ У тебя нет клана!")
         return
     regen_energy(p)
     if check_dead(c, p):
@@ -1227,62 +1273,6 @@ def pet_hatch(c):
     pt = PET_TYPES[pet_key]
     bot.answer_callback_query(c.id, f"🎉 Ты получил {pt['name']}!")
     pets_menu(c)
-
-# ============ КЛАНЫ ============
-@bot.callback_query_handler(func=lambda c: c.data == "clans")
-def clans_menu(c):
-    p = get_player(c.from_user.id)
-    if require_name(c, p):
-        return
-    regen_energy(p); save_player(p)
-    if check_dead(c, p):
-        return
-    text = (
-        f"👥 *КЛАНЫ*\n{LINE}\n"
-        f"💰 Серебро: {p['silver']:,}\n\n"
-        f"Создать клан — 100к серебра"
-    )
-    m = types.InlineKeyboardMarkup()
-    m.add(types.InlineKeyboardButton("🏰 Создать клан (100к)", callback_data="clan_create"))
-    m.add(types.InlineKeyboardButton("🐉 Клановый босс", callback_data="clan_boss"))
-    m.add(types.InlineKeyboardButton("🏆 Топ кланов", callback_data="clan_top"))
-    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
-    try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
-    except: pass
-    bot.answer_callback_query(c.id)
-
-@bot.callback_query_handler(func=lambda c: c.data == "clan_create")
-def clan_create(c):
-    p = get_player(c.from_user.id)
-    if require_name(c, p):
-        return
-    if check_dead(c, p):
-        return
-    if p["silver"] < 100000:
-        bot.answer_callback_query(c.id, "❌ Нужно 100к"); return
-    p["silver"] -= 100000
-    clan_name = f"Клан_{p['name']}"
-    clans[clan_name] = {"leader": p["uid"], "members": [p["uid"]], "silver": 0}
-    save_player(p)
-    bot.answer_callback_query(c.id, f"✅ Клан {clan_name} создан!")
-    clans_menu(c)
-
-@bot.callback_query_handler(func=lambda c: c.data == "clan_top")
-def clan_top(c):
-    if not clans:
-        bot.answer_callback_query(c.id, "❌ Нет кланов"); return
-    sorted_clans = sorted(clans.items(), key=lambda x: len(x[1]["members"]), reverse=True)[:10]
-    lines = ["🏆 *ТОП КЛАНОВ*", LINE, ""]
-    for i, (name, data) in enumerate(sorted_clans, 1):
-        lines.append(f"{i}. {name} — {len(data['members'])} чел.")
-    text = "\n".join(lines)
-    m = types.InlineKeyboardMarkup()
-    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="clans"))
-    try:
-        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
-    except: pass
-    bot.answer_callback_query(c.id)
 
 # ============ РУЛЕТКА ============
 @bot.callback_query_handler(func=lambda c: c.data == "roulette")
