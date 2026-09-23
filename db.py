@@ -22,7 +22,8 @@ VOID_LIST = ["void_heart", "void_shard", "void_soul"]
 AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
 
 FIELDS = (
-    ["uid", "name", "name_changed", "level", "exp", "hp", "max_hp", "silver", "floor",
+    ["uid", "name", "name_changed", "clan",
+     "level", "exp", "hp", "max_hp", "silver", "floor",
      "mob_kill", "keys", "strength", "agility", "vitality", "energy_flow",
      "stat_points", "death_time",
      "weapon", "armor", "accessory",
@@ -56,6 +57,7 @@ def _build_create_sql():
     parts = [
         "uid BIGINT PRIMARY KEY", "name TEXT",
         "name_changed INTEGER DEFAULT 0",
+        "clan TEXT DEFAULT ''",
         "level INTEGER DEFAULT 1", "exp INTEGER DEFAULT 0",
         "hp INTEGER DEFAULT 100", "max_hp INTEGER DEFAULT 100",
         "silver BIGINT DEFAULT 150", "floor INTEGER DEFAULT 1",
@@ -95,6 +97,7 @@ def init_db():
 
     migrations = [
         ("name_changed", "INTEGER DEFAULT 0"),
+        ("clan", "TEXT DEFAULT ''"),
         ("prof_miner", "INTEGER DEFAULT 1"),
         ("exp_miner", "INTEGER DEFAULT 0"),
         ("energy_flow", "INTEGER DEFAULT 0"),
@@ -135,7 +138,7 @@ def get_player(uid, name="Игрок"):
     result = dict(zip(cols, row))
 
     defaults = {
-        "name": "Игрок", "name_changed": 0,
+        "name": "Игрок", "name_changed": 0, "clan": "",
         "level": 1, "exp": 0, "hp": 100, "max_hp": 100,
         "silver": 150, "floor": 1, "mob_kill": 0, "keys": 0,
         "strength": 0, "agility": 0, "vitality": 0, "energy_flow": 0,
