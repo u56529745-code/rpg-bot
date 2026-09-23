@@ -23,7 +23,8 @@ AUTO_MINE_LIST = [f"auto_mine_{r}" for r in ORES_LIST + GEMS_LIST]
 
 FIELDS = (
     ["uid", "name", "level", "exp", "hp", "max_hp", "silver", "floor",
-     "mob_kill", "keys", "strength", "agility", "vitality", "stat_points",
+     "mob_kill", "keys", "strength", "agility", "vitality", "energy_flow",
+     "stat_points", "death_time",
      "weapon", "armor", "accessory",
      "prof_smith", "prof_armorer", "prof_jeweler", "prof_alchemist", "prof_miner",
      "exp_smith", "exp_armorer", "exp_jeweler", "exp_alchemist", "exp_miner",
@@ -48,7 +49,8 @@ def _build_create_sql():
         "silver BIGINT DEFAULT 150", "floor INTEGER DEFAULT 1",
         "mob_kill INTEGER DEFAULT 0", "keys INTEGER DEFAULT 0",
         "strength INTEGER DEFAULT 0", "agility INTEGER DEFAULT 0",
-        "vitality INTEGER DEFAULT 0", "stat_points INTEGER DEFAULT 0",
+        "vitality INTEGER DEFAULT 0", "energy_flow INTEGER DEFAULT 0",
+        "stat_points INTEGER DEFAULT 0", "death_time DOUBLE PRECISION DEFAULT 0",
         "weapon TEXT DEFAULT 'fists'", "armor TEXT DEFAULT 'none'",
         "accessory TEXT DEFAULT 'none'",
         "prof_smith INTEGER DEFAULT 1", "prof_armorer INTEGER DEFAULT 1",
@@ -82,6 +84,8 @@ def init_db():
     migrations = [
         ("prof_miner", "INTEGER DEFAULT 1"),
         ("exp_miner", "INTEGER DEFAULT 0"),
+        ("energy_flow", "INTEGER DEFAULT 0"),
+        ("death_time", "DOUBLE PRECISION DEFAULT 0"),
         ("auto_mine_active", "INTEGER DEFAULT 0"),
         ("auto_mine_started", "DOUBLE PRECISION DEFAULT 0"),
         ("auto_mine_last_collect", "DOUBLE PRECISION DEFAULT 0"),
@@ -120,7 +124,8 @@ def get_player(uid, name="Игрок"):
     defaults = {
         "name": "Игрок", "level": 1, "exp": 0, "hp": 100, "max_hp": 100,
         "silver": 150, "floor": 1, "mob_kill": 0, "keys": 0,
-        "strength": 0, "agility": 0, "vitality": 0, "stat_points": 0,
+        "strength": 0, "agility": 0, "vitality": 0, "energy_flow": 0,
+        "stat_points": 0, "death_time": 0,
         "weapon": "fists", "armor": "none", "accessory": "none",
         "prof_smith": 1, "prof_armorer": 1, "prof_jeweler": 1,
         "prof_alchemist": 1, "prof_miner": 1,
