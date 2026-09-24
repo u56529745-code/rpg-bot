@@ -119,7 +119,7 @@ VOID_TIER = {
     "void_soul": "SSS+",
 }
 
-# ============ ОРУЖИЕ (26 + базовое) ============
+# ============ ОРУЖИЕ ============
 WEAPONS = {
     "fists": {"name": "👊 Кулаки", "dmg": 5, "level": 0, "tier": "E"},
     "sword": {"name": "🗡 Меч", "dmg": 15, "level": 1, "tier": "E", "buff": "dmg10"},
@@ -157,8 +157,9 @@ WEAPONS = {
 
 WEAPON_TIER = {k: v.get("tier", "E") for k, v in WEAPONS.items()}
 
-# ============ БРОНЯ (20 + секретные) ============
+# ============ БРОНЯ (С ФИКСОМ `none`) ============
 ARMORS = {
+    "none": {"name": "🚫 Без брони", "def": 0, "level": 0, "tier": "E"},
     "leather": {"name": "🧥 Кожаная", "def": 3, "level": 1, "tier": "E"},
     "chain": {"name": "⛓ Кольчуга", "def": 8, "level": 3, "tier": "D"},
     "plate": {"name": "🛡 Латная", "def": 15, "level": 5, "tier": "C"},
@@ -186,8 +187,9 @@ ARMORS = {
 
 ARMOR_TIER = {k: v.get("tier", "E") for k, v in ARMORS.items()}
 
-# ============ БИЖУТЕРИЯ (20 + секретные) ============
+# ============ БИЖУТЕРИЯ (С ФИКСОМ `none`) ============
 ACCESSORIES = {
+    "none": {"name": "🚫 Нет", "bonus": 0, "level": 0, "tier": "E"},
     "ring_copper": {"name": "💍 Медное кольцо", "bonus": 5, "level": 1, "tier": "E"},
     "ring_iron": {"name": "💍 Железное кольцо", "bonus": 10, "level": 3, "tier": "D"},
     "amulet_gold": {"name": "📿 Золотой амулет", "bonus": 20, "level": 5, "tier": "C"},
@@ -486,7 +488,6 @@ def roll_amount():
 
 # ============ БАФФЫ ============
 BUFFS = {
-    # Старые (секретные)
     "crit25": {"name": "+25% крит", "crit": 25},
     "dmg25": {"name": "+25% урон", "dmg": 25},
     "agi25": {"name": "+25% ловкость", "agi": 25},
@@ -495,7 +496,6 @@ BUFFS = {
     "exp25": {"name": "+25% опыт", "exp": 25},
     "silver25": {"name": "+25% серебро", "silver": 25},
     "dmg50_agi15": {"name": "+50% урон, +15% ловк", "dmg": 50, "agi": 15},
-    # Новые простые
     "dmg10": {"name": "+10% урон", "dmg": 10},
     "dmg15": {"name": "+15% урон", "dmg": 15},
     "dmg20": {"name": "+20% урон", "dmg": 20},
@@ -510,9 +510,7 @@ BUFFS = {
     "exp15": {"name": "+15% опыт", "exp": 15},
     "silver10": {"name": "+10% серебро", "silver": 10},
     "silver15": {"name": "+15% серебро", "silver": 15},
-    # Хил при ударе (для Кровавого копья)
     "heal5_20": {"name": "5% шанс отхила 20% урона", "heal": 5, "heal_pct": 20},
-    # Яд
     "poison15": {"name": "15% шанс яда", "poison": 15},
 }
 
