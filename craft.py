@@ -74,7 +74,9 @@ def can_craft_void(p, recipe_key):
         return False, "❌ Нужно 100 Бездонных душ"
     base = r["base_item"]
     items = get_inventory(p)
-    if base not in items and p.get("weapon") != base and p.get("armor") != base and p.get("accessory") != base:
+    # base может быть как строкой (старый формат), так и словарём
+    keys = [it["key"] if isinstance(it, dict) else it for it in items]
+    if base not in keys and p.get("weapon") != base and p.get("armor") != base and p.get("accessory") != base:
         return False, f"❌ Нужен предмет 100 ур."
     return True, "ok"
 
@@ -99,7 +101,7 @@ def do_craft(p, recipe_key):
         p[f"exp_{prof}"] = (p.get(f"exp_{prof}", 0) or 0) + exp_gain
         inv = get_inventory(p)
         for _ in range(5):
-            inv.append(recipe_key)
+            inv.append({"key": recipe_key, "upgrade": 0})
         set_inventory(p, inv)
         new_level = prof_level_from_exp(p[f"exp_{prof}"])
         if new_level > p[f"prof_{prof}"]:
@@ -117,7 +119,7 @@ def do_craft(p, recipe_key):
         exp_gain = craft_exp_for_level(r["level"])
         p[f"exp_{prof}"] = (p.get(f"exp_{prof}", 0) or 0) + exp_gain
         inv = get_inventory(p)
-        inv.append(recipe_key)
+        inv.append({"key": recipe_key, "upgrade": 0})
         set_inventory(p, inv)
         new_level = prof_level_from_exp(p[f"exp_{prof}"])
         level_up = False
@@ -142,6 +144,6 @@ def do_craft_void(p, recipe_key):
     p["void_shard"] -= r["void_shard"]
     p["void_soul"] -= r["void_soul"]
     inv = get_inventory(p)
-    inv.append(recipe_key)
+    inv.append({"key": recipe_key, "upgrade": 0})
     set_inventory(p, inv)
     return True, f"🖤 {recipe_key} скрафчен!"
