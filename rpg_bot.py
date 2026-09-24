@@ -8,7 +8,8 @@ import battle as battle_module
 from battle import (
     calc_player_stats, make_mob, player_turn, mob_turn,
     roll_herb, roll_ore_drop, roll_gem_drop, roll_loot, roll_meat, battle_text,
-    is_dead, revive_if_possible, DEATH_TIME,
+    is_dead, revive_if_possible, DEATH_TIME, get_armor_hp_bonus,
+    apply_poison, tick_poison,
 )
 from craft import can_craft, do_craft, can_craft_void, do_craft_void
 
@@ -22,7 +23,7 @@ def index():
 
 battles = {}
 clan_boss = {"hp": 500000, "max_hp": 500000, "last_death": 0, "damage": {}}
-world_boss = {"hp": 500000, "max_hp": 500000, "last_spawn": 0, "damage": {}}
+world_boss = {"hp": 1500000, "max_hp": 1500000, "last_spawn": 0, "damage": {}}
 
 awaiting_name = {}
 
@@ -39,11 +40,9 @@ FEED_MEAT = 30
 SATIETY_PER_LEVEL = 100
 EVO_LEVEL = 10
 
-MEAT_NAMES = {"raw_meat": "🥩 Сырое мясо"}
-
-# ============ УТИЛИТЫ ============
 LINE = "━━━━━━━━━━━━━━━━━━"
 
+# ============ УТИЛИТЫ ============
 def safe_name(name):
     return str(name).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 
@@ -82,6 +81,12 @@ def item_type(key):
     if key in ARMORS: return "armor"
     if key in ACCESSORIES: return "accessory"
     return None
+
+def item_tier(key):
+    if key in WEAPON_TIER: return WEAPON_TIER[key]
+    if key in ARMOR_TIER: return ARMOR_TIER[key]
+    if key in ACCESSORY_TIER: return ACCESSORY_TIER[key]
+    return "E"
 
 def try_equip_if_better(p, key):
     t = item_type(key)
@@ -123,7 +128,7 @@ def check_dead(c, p):
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("👤 Профиль", callback_data="profile"),
               types.InlineKeyboardButton("🎒 Инвентарь", callback_data="inv"))
-        m.add(types.InlineKeyboardButton("🏆 Топ", callback_data="top"))
+        m.add(types.InlineKeyboardButton("🏆 Топ", callback_data="top_menu"))
         try:
             bot.edit_message_text(text, c.message.chat.id, c.message.message_id,
                                   reply_markup=m, parse_mode="Markdown")
@@ -137,20 +142,14 @@ def check_dead(c, p):
 
 # ============ СОБЫТИЯ ============
 def get_current_event():
-    """Возвращает (название, множитель дропа, множитель опыта, кровавая луна)."""
     now = time.localtime()
-    wd = now.tm_wday  # 0=Пн, 5=Сб, 6=Вс
+    wd = now.tm_wday
     hour = now.tm_hour
-    # Сб/Вс: ×2 дроп весь день
     if wd == 5 or wd == 6:
         return ("🎉 Выходные! ×2 дроп", 2.0, 1.0, False)
-    # Пн 12:00–17:00 МСК = 09:00–14:00 UTC
-    # Но сервер во Франкфурте (UTC+1 зимой / UTC+2 летом).
-    # Проще: используем МСК = UTC+3. Сервер вернёт UTC.
-    # Берём UTC и прибавляем 3.
     msk_hour = (hour + 3) % 24
     if wd == 0 and 12 <= msk_hour < 17:
-        return ("🌑 Кровавая луна! ×2 опыт, ×2 урон мобов", 1.0, 2.0, True)
+        return ("🌑 Кровавая луна! ×2 опыт, ×2 урон", 1.0, 2.0, True)
     return (None, 1.0, 1.0, False)
 
 def update_event_flag():
@@ -172,6 +171,7 @@ def main_menu():
         types.InlineKeyboardButton("🐉 Клановый босс", callback_data="clan_boss"),
         types.InlineKeyboardButton("🎰 Рулетка", callback_data="roulette"),
         types.InlineKeyboardButton("🐾 Питомцы", callback_data="pets"),
+        types.InlineKeyboardButton("📖 Справочник", callback_data="handbook"),
         types.InlineKeyboardButton("🏆 Топы", callback_data="top_menu"),
     )
     return m
@@ -356,6 +356,7 @@ def stats(c):
     dmg, defense, crit, hp_bonus = calc_player_stats(p)
     flow = p.get("energy_flow", 0) or 0
     regen = 3 + flow * 0.1
+    armor_hp = get_armor_hp_bonus(p)
     text = (
         f"📊 *СТАТЫ*\n{LINE}\n"
         f"💪 Сила: {p['strength']}\n"
@@ -363,7 +364,8 @@ def stats(c):
         f"❤️ Выносливость: {p['vitality']}\n"
         f"⚡ Энергопоток: {flow} (+{regen:.1f} / 20 сек)\n\n"
         f"⚔️ Урон: {dmg}\n🛡 Защита: {defense}\n💥 Крит: {crit}%\n"
-        f"❤️ Бонус HP: +{hp_bonus}%\n\n"
+        f"❤️ Бонус HP: +{hp_bonus}%\n"
+        f"🛡 HP от брони: +{armor_hp}\n\n"
         f"🎯 Очков: *{p['stat_points']}*"
     )
     m = types.InlineKeyboardMarkup(row_width=2)
@@ -462,7 +464,7 @@ def fight_start(c):
         bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
     except: pass
     bot.answer_callback_query(c.id)
-    
+
 @bot.callback_query_handler(func=lambda c: c.data == "fight_turn")
 def fight_turn(c):
     uid = c.from_user.id
@@ -474,13 +476,21 @@ def fight_turn(c):
     mob = battles[uid]["mob"]
     turn = battles[uid].get("turn", 1)
 
-    pdmg, is_crit, p_dodged, pet_dmg, pet_strike = player_turn(p, mob, turn)
+    pdmg, is_crit, p_dodged, pet_dmg, pet_strike, heal_msg, poison_applied = player_turn(p, mob, turn)
+
+    if poison_applied:
+        apply_poison(mob, pdmg)
+
+    poison_tick = 0
+    if mob["hp"] > 0:
+        poison_tick = tick_poison(mob)
 
     m_dmg, m_dodged = 0, False
     if mob["hp"] > 0:
         m_dmg, m_dodged = mob_turn(p, mob)
 
-    log = battle_text(p, mob, pdmg, is_crit, m_dmg, m_dodged, p_dodged, pet_dmg, pet_strike)
+    log = battle_text(p, mob, pdmg, is_crit, m_dmg, m_dodged, p_dodged,
+                      pet_dmg, pet_strike, heal_msg, poison_applied, poison_tick)
 
     if mob["hp"] <= 0:
         _, drop_mult, exp_mult, _ = get_current_event()
@@ -496,12 +506,10 @@ def fight_turn(c):
         loot = roll_loot(p["floor"])
         p[loot] = (p.get(loot, 0) or 0) + 1
 
-        # Мясо 10%
         got_meat = roll_meat()
         if got_meat:
             p["raw_meat"] = (p.get("raw_meat", 0) or 0) + 1
 
-        # Золотой моб — гарантированный доп. лут
         golden_bonus = ""
         if mob.get("golden"):
             extra_loot = roll_loot(p["floor"])
@@ -510,12 +518,10 @@ def fight_turn(c):
             p["keys"] += 1
             golden_bonus = f"\n🌟 Бонус золотого: +2 {MOB_LOOT[extra_loot]['name']}, +2 🥩, +1 🔑"
 
-        # Ключи 6%
         key_drop = random.randint(1, 100) <= 6
         if key_drop:
             p["keys"] += 1
 
-        # Гарантированный ключ каждые 50 мобов
         if p["mob_kill"] % 50 == 0 and p["mob_kill"] > 0:
             p["keys"] += 1
             golden_bonus += "\n🔑 Гарантированный ключ за 50 мобов!"
@@ -614,7 +620,7 @@ def use_key(c):
     save_player(p)
     bot.answer_callback_query(c.id, f"🔑 Этаж {p['floor']} открыт!")
     tower(c)
-
+    
 # ============ ШАХТА ============
 @bot.callback_query_handler(func=lambda c: c.data == "mine")
 def mine(c):
@@ -686,7 +692,6 @@ def dig(c):
         p[key] = (p.get(key, 0) or 0) + data["amt"]
         total_exp += data["exp"]
 
-    # Опыт шахтёра с множителем события
     total_exp = int(total_exp * (1.5 if get_current_event()[2] > 1 else 1.0))
 
     p["exp_miner"] = (p.get("exp_miner", 0) or 0) + total_exp
@@ -695,6 +700,13 @@ def dig(c):
     if new_lvl > p["prof_miner"]:
         p["prof_miner"] = new_lvl
         level_up = True
+
+    legend_msg = ""
+    if p["prof_miner"] >= 100 and p.get("legend_chest_miner", 0) == 0:
+        p["legend_chest_miner"] = 1
+        p["chest_legend"] = (p.get("chest_legend", 0) or 0) + 1
+        legend_msg = "\n👑 ЛЕГЕНДАРНЫЙ СУНДУК за 100 уровень шахтёра!"
+
     p["mine_count"] += 1
     save_player(p)
     text_lines.append("")
@@ -702,6 +714,8 @@ def dig(c):
     text_lines.append(f"⚡ Осталось: {p['energy']}")
     if level_up:
         text_lines.append(f"\n🎉 *Шахтёр → ур. {new_lvl}!*")
+    if legend_msg:
+        text_lines.append(legend_msg)
     text = "\n".join(text_lines)
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("⛏ Ещё", callback_data="dig"),
@@ -856,7 +870,7 @@ def auto_mine_collect(c):
     bot.answer_callback_query(c.id, f"💰 Забрано: {total} шт.")
     auto_mine_menu(c)
 
-# ============ ИНВЕНТАРЬ (ПОДРАЗДЕЛЫ) ============
+# ============ ИНВЕНТАРЬ ============
 INV_PAGE_SIZE = 7
 
 @bot.callback_query_handler(func=lambda c: c.data == "inv")
@@ -874,6 +888,7 @@ def inv(c):
         types.InlineKeyboardButton("🥩 Мясо", callback_data="inv_cat_meat_0"),
         types.InlineKeyboardButton("👹 Лут", callback_data="inv_cat_loot_0"),
         types.InlineKeyboardButton("🖤 Бездна", callback_data="inv_cat_void_0"),
+        types.InlineKeyboardButton("📦 Сундуки", callback_data="inv_chests"),
         types.InlineKeyboardButton("⚔️ Снаряжение", callback_data="inv_cat_gear_0"),
     )
     m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
@@ -925,7 +940,6 @@ def inv_category(c):
         else:
             for key in inv_items:
                 items.append(f"{item_name(key)} (+{stat_of(key)})")
-        # Постранично с кнопками для действий
         total = len(inv_items)
         pages = max(1, (total + INV_PAGE_SIZE - 1) // INV_PAGE_SIZE)
         if page >= pages: page = 0
@@ -937,8 +951,8 @@ def inv_category(c):
         m = types.InlineKeyboardMarkup(row_width=1)
         for i, key in enumerate(page_items):
             real_idx = start + i
-            m.add(types.InlineKeyboardButton(f"{item_name(key)} (+{stat_of(key)})", callback_data=f"item_{real_idx}"))
-        # Кнопки страниц
+            tier = item_tier(key)
+            m.add(types.InlineKeyboardButton(f"{item_name(key)} (+{stat_of(key)}) [{tier}]", callback_data=f"item_{real_idx}"))
         nav = []
         if pages > 1:
             if page > 0:
@@ -955,7 +969,6 @@ def inv_category(c):
         bot.answer_callback_query(c.id)
         return
 
-    # Для остальных категорий — просто текст с пагинацией
     total = len(items)
     pages = max(1, (total + INV_PAGE_SIZE - 1) // INV_PAGE_SIZE)
     if page >= pages: page = 0
@@ -1002,7 +1015,19 @@ def item_action(c):
     key = inv_items[idx]
     name = item_name(key)
     s = stat_of(key)
-    text = f"📦 *{name}*\n{LINE}\n📊 Бонус: +{s}\n\nЧто сделать?"
+    tier = item_tier(key)
+    buff_str = ""
+    if key in WEAPONS and WEAPONS[key].get("buff"):
+        buff_key = WEAPONS[key]["buff"]
+        buff_str = f"\n✨ {BUFFS[buff_key]['name']}" if buff_key in BUFFS else ""
+    elif key in ARMORS and ARMORS[key].get("buff"):
+        buff_key = ARMORS[key]["buff"]
+        buff_str = f"\n✨ {BUFFS[buff_key]['name']}" if buff_key in BUFFS else ""
+    elif key in ACCESSORIES and ACCESSORIES[key].get("buff"):
+        buff_key = ACCESSORIES[key]["buff"]
+        buff_str = f"\n✨ {BUFFS[buff_key]['name']}" if buff_key in BUFFS else ""
+
+    text = f"📦 *{name}* [{tier}]\n{LINE}\n📊 Бонус: +{s}{buff_str}\n\nЧто сделать?"
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(types.InlineKeyboardButton("✅ Надеть", callback_data=f"equip_{idx}"),
           types.InlineKeyboardButton("💰 Продать", callback_data=f"sell_{idx}"))
@@ -1028,19 +1053,32 @@ def equip_item(c):
     if not t:
         bot.answer_callback_query(c.id, "❌ Нельзя надеть")
         return
-    # Возвращаем старое в инвентарь, если оно не "none"/"fists"
+
     old = p.get(t, "none")
     inv_items.pop(idx)
     if old and old not in ("none", "fists"):
         inv_items.append(old)
+
     p[t] = key
+
+    # Пересчёт max_hp от брони (если это броня)
+    if t == "armor":
+        old_armor_hp = 0
+        if old in ARMORS:
+            old_armor_hp = ARMORS[old].get("def", 0) * 3
+        new_armor_hp = ARMORS.get(key, {}).get("def", 0) * 3
+        p["max_hp"] = p["max_hp"] - old_armor_hp + new_armor_hp
+        if p["hp"] > p["max_hp"]:
+            p["hp"] = p["max_hp"]
+        if p["hp"] < 1:
+            p["hp"] = 1
+
     set_inv(p, inv_items)
     save_player(p)
     bot.answer_callback_query(c.id, "✅ Надето!")
     inv_cat_gear_reload(c)
 
 def inv_cat_gear_reload(c):
-    # Пересоздаём callback на "inv_cat_gear_0"
     c.data = "inv_cat_gear_0"
     inv_category(c)
 
@@ -1100,8 +1138,8 @@ def upgrade_item(c):
     save_player(p)
     bot.answer_callback_query(c.id, msg)
     inv_cat_gear_reload(c)
-
-# ============ КРАФТ (С ПАГИНАЦИЕЙ) ============
+    
+# ============ КРАФТ ============
 CRAFT_PAGE_SIZE = 7
 
 @bot.callback_query_handler(func=lambda c: c.data == "craft")
@@ -1170,14 +1208,13 @@ def craft_category(c):
     m = types.InlineKeyboardMarkup(row_width=1)
     for key, r, can in page_items:
         mark = "✅" if can else "🔒"
-        m.add(types.InlineKeyboardButton(f"{mark} {r['name']} (ур.{r['level']})", callback_data=f"recipe_{key}"))
+        tier = WEAPON_TIER.get(key) or ARMOR_TIER.get(key) or ACCESSORY_TIER.get(key) or POTION_TIER.get(key, "E")
+        m.add(types.InlineKeyboardButton(f"{mark} {r['name']} (ур.{r['level']}) [{tier}]", callback_data=f"recipe_{key}"))
 
-    # Фильтр
     filter_btn = "🔓 Показать все" if only_avail == "avail" else "🔒 Только доступные"
     next_filter = "all" if only_avail == "avail" else "avail"
     m.add(types.InlineKeyboardButton(filter_btn, callback_data=f"craftcat_{prof}_0_{next_filter}"))
 
-    # Пагинация
     nav = []
     if pages > 1:
         if page > 0:
@@ -1230,9 +1267,22 @@ def recipe_view(c):
     if not r:
         bot.answer_callback_query(c.id, "❌ Нет рецепта"); return
     prof = r["prof"]
-    lines = [f"🔨 *{r['name']}*", LINE,
+    tier = WEAPON_TIER.get(key) or ARMOR_TIER.get(key) or ACCESSORY_TIER.get(key) or POTION_TIER.get(key, "E")
+
+    buff_str = ""
+    if key in WEAPONS and WEAPONS[key].get("buff"):
+        buff_key = WEAPONS[key]["buff"]
+        buff_str = f"\n✨ Эффект: {BUFFS[buff_key]['name']}" if buff_key in BUFFS else ""
+    elif key in ARMORS and ARMORS[key].get("buff"):
+        buff_key = ARMORS[key]["buff"]
+        buff_str = f"\n✨ Эффект: {BUFFS[buff_key]['name']}" if buff_key in BUFFS else ""
+    elif key in ACCESSORIES and ACCESSORIES[key].get("buff"):
+        buff_key = ACCESSORIES[key]["buff"]
+        buff_str = f"\n✨ Эффект: {BUFFS[buff_key]['name']}" if buff_key in BUFFS else ""
+
+    lines = [f"🔨 *{r['name']}* [{tier}]", LINE,
              f"Профессия: {PROFESSIONS[prof]}",
-             f"Уровень: {r['level']} (у тебя {p[f'prof_{prof}']})", ""]
+             f"Уровень: {r['level']} (у тебя {p[f'prof_{prof}']}){buff_str}", ""]
     if "ore" in r:
         lines.append("🪨 *Ресурсы:*")
         for res, amt in r["ore"].items():
@@ -1309,7 +1359,210 @@ def craft_void_menu(c):
         bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
     except: pass
     bot.answer_callback_query(c.id)
-    
+
+# ============ СПРАВОЧНИК ============
+@bot.callback_query_handler(func=lambda c: c.data == "handbook")
+def handbook_menu(c):
+    text = f"📖 *СПРАВОЧНИК*\n{LINE}\nВыбери раздел:"
+    m = types.InlineKeyboardMarkup(row_width=2)
+    m.add(
+        types.InlineKeyboardButton("⚔️ Оружие", callback_data="hb_weapons_0"),
+        types.InlineKeyboardButton("🛡 Броня", callback_data="hb_armors_0"),
+        types.InlineKeyboardButton("💍 Бижутерия", callback_data="hb_accessories_0"),
+        types.InlineKeyboardButton("⚗️ Зелья", callback_data="hb_potions_0"),
+        types.InlineKeyboardButton("🪨 Руда", callback_data="hb_ores_0"),
+        types.InlineKeyboardButton("💎 Самоцветы", callback_data="hb_gems_0"),
+        types.InlineKeyboardButton("🌿 Травы", callback_data="hb_herbs_0"),
+        types.InlineKeyboardButton("👹 Лут", callback_data="hb_loot_0"),
+        types.InlineKeyboardButton("🎁 Сундуки", callback_data="hb_chests_0"),
+    )
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="menu"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("hb_"))
+def handbook_show(c):
+    parts = c.data.split("_")
+    cat = parts[1]
+    page = int(parts[2])
+    p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
+
+    items = []
+
+    if cat == "weapons":
+        for k, v in WEAPONS.items():
+            if k == "fists": continue
+            buff = ""
+            if v.get("buff") and v["buff"] in BUFFS:
+                buff = f" | {BUFFS[v['buff']]['name']}"
+            items.append(f"{v['name']} [{v['tier']}]\n  ⚔️{dmg} ур.{v['level']}{buff}" if False else f"{v['name']} [{v['tier']}]\n  ⚔️ {v['dmg']} • ур.{v['level']}{buff}")
+    elif cat == "armors":
+        for k, v in ARMORS.items():
+            items.append(f"{v['name']} [{v['tier']}]\n  🛡 {v['def']} • ур.{v['level']}")
+    elif cat == "accessories":
+        for k, v in ACCESSORIES.items():
+            buff = ""
+            if v.get("buff") and v["buff"] in BUFFS:
+                buff = f" | {BUFFS[v['buff']]['name']}"
+            items.append(f"{v['name']} [{v['tier']}]\n  💍 {v['bonus']} • ур.{v['level']}{buff}")
+    elif cat == "potions":
+        for k, v in POTIONS.items():
+            items.append(f"{v['name']} [{v['tier']}]\n  ур.{v['level']}")
+    elif cat == "ores":
+        for k, v in ORES.items():
+            items.append(f"{v['name']} [{v['tier']}] — {v['price']:,}💰")
+    elif cat == "gems":
+        for k, v in GEMS.items():
+            items.append(f"{v['name']} [{v['tier']}] — {v['price']:,}💰")
+    elif cat == "herbs":
+        for k, v in HERBS.items():
+            items.append(f"{v['name']} [{v['tier']}] — {v['price']:,}💰")
+    elif cat == "loot":
+        for k, v in MOB_LOOT.items():
+            items.append(f"{v['name']} [{v['tier']}] — {v['price']:,}💰")
+    elif cat == "chests":
+        for k, v in CHEST_TYPES.items():
+            items.append(
+                f"{v['name']} [{v['tier']}]\n"
+                f"  🎁 секрет: {v['secret_chance']}%\n"
+                f"  🐾 питомец: {v['pet_chance']}%\n"
+                f"  💰 {v['silver']:,} серебра"
+            )
+
+    total = len(items)
+    pages = max(1, (total + INV_PAGE_SIZE - 1) // INV_PAGE_SIZE)
+    if page >= pages: page = 0
+    start = page * INV_PAGE_SIZE
+    end = start + INV_PAGE_SIZE
+    page_items = items[start:end]
+
+    titles = {
+        "weapons": "⚔️ ОРУЖИЕ", "armors": "🛡 БРОНЯ", "accessories": "💍 БИЖУТЕРИЯ",
+        "potions": "⚗️ ЗЕЛЬЯ", "ores": "🪨 РУДА", "gems": "💎 САМОЦВЕТЫ",
+        "herbs": "🌿 ТРАВЫ", "loot": "👹 ЛУТ", "chests": "🎁 СУНДУКИ"
+    }
+    header = titles.get(cat, "📖")
+    text = f"{header} ({total})\n{LINE}\n" + ("\n\n".join(page_items) if page_items else "_Пусто_")
+
+    m = types.InlineKeyboardMarkup(row_width=3)
+    nav = []
+    if pages > 1:
+        if page > 0:
+            nav.append(types.InlineKeyboardButton("◀️", callback_data=f"hb_{cat}_{page-1}"))
+        nav.append(types.InlineKeyboardButton(f"{page+1}/{pages}", callback_data="ignore"))
+        if page < pages - 1:
+            nav.append(types.InlineKeyboardButton("▶️", callback_data=f"hb_{cat}_{page+1}"))
+    if nav:
+        m.row(*nav)
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="handbook"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id)
+
+# ============ СУНДУКИ ============
+@bot.callback_query_handler(func=lambda c: c.data == "inv_chests")
+def inv_chests(c):
+    p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
+    cc = p.get("chest_common", 0) or 0
+    cr = p.get("chest_rare", 0) or 0
+    cl = p.get("chest_legend", 0) or 0
+    text = (
+        f"📦 *СУНДУКИ*\n{LINE}\n"
+        f"🎁 Обычные: {cc}\n"
+        f"💎 Редкие: {cr}\n"
+        f"👑 Легендарные: {cl}\n\n"
+        f"Открой сундук, чтобы получить награды:"
+    )
+    m = types.InlineKeyboardMarkup(row_width=1)
+    if cc > 0:
+        m.add(types.InlineKeyboardButton(f"🎁 Открыть обычный ({cc})", callback_data="open_chest_common"))
+    if cr > 0:
+        m.add(types.InlineKeyboardButton(f"💎 Открыть редкий ({cr})", callback_data="open_chest_rare"))
+    if cl > 0:
+        m.add(types.InlineKeyboardButton(f"👑 Открыть легендарный ({cl})", callback_data="open_chest_legend"))
+    if cc == 0 and cr == 0 and cl == 0:
+        m.add(types.InlineKeyboardButton("❌ Нет сундуков", callback_data="ignore"))
+    m.add(types.InlineKeyboardButton("🔙 Назад", callback_data="inv"))
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except: pass
+    bot.answer_callback_query(c.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("open_chest_"))
+def open_chest(c):
+    chest_type = c.data.replace("open_chest_", "")
+    p = get_player(c.from_user.id)
+    if require_name(c, p):
+        return
+
+    field = f"chest_{chest_type}"
+    if p.get(field, 0) <= 0:
+        bot.answer_callback_query(c.id, "❌ Нет такого сундука")
+        return
+
+    p[field] -= 1
+    cfg = CHEST_TYPES[chest_type]
+    result_lines = [f"📦 *{cfg['name']}*\n{LINE}\n"]
+    got_something = False
+
+    # Секретный предмет
+    if random.randint(1, 100) <= cfg["secret_chance"]:
+        secret_key = random.choice(SECRET_ITEMS)
+        inv = get_inv(p)
+        inv.append(secret_key)
+        set_inv(p, inv)
+        name = item_name(secret_key)
+        result_lines.append(f"🎁 СЕКРЕТНЫЙ: *{name}*!")
+        got_something = True
+
+    # Питомец
+    if random.randint(1, 100) <= cfg["pet_chance"]:
+        pet_key = random.choice(PET_POOL)
+        pets = get_pets(p)
+        pets.append({"key": pet_key, "level": 1, "satiety": 0, "evolved": False})
+        set_pets(p, pets)
+        pt = PET_TYPES.get(pet_key, {})
+        result_lines.append(f"🐾 ПИТОМЕЦ: *{pt.get('name', pet_key)}*!")
+        got_something = True
+
+    # Ресурсы
+    res_cfg = CHEST_RESOURCES[chest_type]
+    ore_key = random.choice(res_cfg["ore"])
+    ore_amt = random.randint(res_cfg["count_min"], res_cfg["count_max"])
+    p[ore_key] = (p.get(ore_key, 0) or 0) + ore_amt
+    result_lines.append(f"🪨 {ORES[ore_key]['name']} ×{ore_amt}")
+
+    meat_amt = res_cfg["meat"]
+    p["raw_meat"] = (p.get("raw_meat", 0) or 0) + meat_amt
+    result_lines.append(f"🥩 Сырое мясо ×{meat_amt}")
+
+    shard_amt = res_cfg["void_shard"]
+    p["void_shard"] = (p.get("void_shard", 0) or 0) + shard_amt
+    result_lines.append(f"💠 Осколок бездны ×{shard_amt}")
+
+    # Серебро
+    silver_amt = cfg["silver"]
+    p["silver"] += silver_amt
+    result_lines.append(f"💰 Серебро +{silver_amt:,}")
+
+    save_player(p)
+    text = "\n".join(result_lines)
+    m = types.InlineKeyboardMarkup()
+    m.add(types.InlineKeyboardButton("📦 Ещё сундуки", callback_data="inv_chests"))
+    m.add(types.InlineKeyboardButton("🔙 Инвентарь", callback_data="inv"))
+    bot.answer_callback_query(c.id, "📦 Открыто!")
+    try:
+        bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
+    except:
+        bot.send_message(c.message.chat.id, text, reply_markup=m, parse_mode="Markdown")
+        
 # ============ ПИТОМЦЫ ============
 @bot.callback_query_handler(func=lambda c: c.data == "pets")
 def pets_menu(c):
@@ -1445,7 +1698,6 @@ def pet_feed(c):
     pet = pets[idx]
 
     if is_herb:
-        # Проверяем, есть ли хоть одна трава
         available_herb = None
         for h in HERBS.keys():
             if p.get(h, 0) > 0:
@@ -1464,13 +1716,11 @@ def pet_feed(c):
     pet["satiety"] = pet.get("satiety", 0) + gain
     msg = f"🍖 +{gain} сытости"
 
-    # Проверка левелапа
     while pet["satiety"] >= SATIETY_PER_LEVEL and pet.get("level", 1) < EVO_LEVEL:
         pet["satiety"] -= SATIETY_PER_LEVEL
         pet["level"] = pet.get("level", 1) + 1
         msg += f"\n⭐ Уровень {pet['level']}!"
 
-    # Эволюция
     if pet.get("level", 1) >= EVO_LEVEL and not pet.get("evolved", False):
         pet["evolved"] = True
         pt = PET_TYPES.get(pet.get("key", ""), {})
@@ -1481,7 +1731,7 @@ def pet_feed(c):
     bot.answer_callback_query(c.id, msg[:200])
     pet_choose(c)
 
-# ============ КЛАНЫ (СОЗДАНИЕ) ============
+# ============ КЛАНЫ ============
 @bot.callback_query_handler(func=lambda c: c.data == "clan_boss")
 def clan_boss_menu(c):
     global clan_boss
@@ -1529,7 +1779,7 @@ def clan_boss_menu(c):
         f"❤️ HP: {clan_boss['hp']:,}/{clan_boss['max_hp']:,}\n"
         f"⚔️ Урон: 500\n"
         f"🎯 Ловкость: 15%\n\n"
-        f"Награда: сундук (5% оружие, 10 руды)\n"
+        f"Награда: 🎁 сундук (5% шанс)\n"
         f"Возрождение: 5 мин"
     )
     m = types.InlineKeyboardMarkup()
@@ -1594,17 +1844,23 @@ def clan_boss_hit(c):
             bot.answer_callback_query(c.id, "💀 Ты умер!")
             return
     save_player(p)
+
+    clan_msg = ""
     if clan_boss["hp"] <= 0:
         clan_boss["last_death"] = time.time()
+        # Шанс на сундук 5%
         if random.randint(1, 100) <= 5:
-            p["void_shard"] = (p.get("void_shard", 0) or 0) + 5
+            p["chest_common"] = (p.get("chest_common", 0) or 0) + 1
+            clan_msg = "\n🎁 Выпал ОБЫЧНЫЙ СУНДУК!"
+        # Ресурсы
         for _ in range(10):
             ore = random.choice(list(ORES.keys()))
             p[ore] = (p.get(ore, 0) or 0) + 1
         if random.randint(1, 100) <= 50:
             p["void_shard"] = (p.get("void_shard", 0) or 0) + 1
         save_player(p)
-        bot.send_message(c.message.chat.id, "🎉 Клановый босс побеждён! Награда получена!")
+        bot.send_message(c.message.chat.id, f"🎉 Клановый босс побеждён! Награда получена!{clan_msg}")
+
     bot.answer_callback_query(c.id, f"⚔️ {dmg} урона!")
     clan_boss_menu(c)
 
@@ -1725,9 +1981,9 @@ def world_boss_menu(c):
         return
     now = time.time()
     if world_boss["hp"] <= 0:
-        if now - world_boss["last_spawn"] < 86400:
-            remaining = int((86400 - (now - world_boss["last_spawn"])) / 3600)
-            bot.answer_callback_query(c.id, f"⏱ Возрождение через ~{remaining}ч")
+        if now - world_boss["last_spawn"] < 10800:
+            remaining = int((10800 - (now - world_boss["last_spawn"])) / 60)
+            bot.answer_callback_query(c.id, f"⏱ Возрождение через ~{remaining} мин")
             return
         else:
             world_boss["hp"] = world_boss["max_hp"]
@@ -1735,9 +1991,9 @@ def world_boss_menu(c):
     text = (
         f"🌍 *МИРОВОЙ БОСС*\n{LINE}\n"
         f"❤️ HP: {world_boss['hp']:,}/{world_boss['max_hp']:,}\n"
-        f"⚔️ Урон: 500\n\n"
+        f"⚔️ Урон: 750\n\n"
         f"За удар: 📈 +50 опыта, 1% шанс на секретный предмет\n\n"
-        f"Возрождение: каждые 24ч в 16:00 МСК"
+        f"Возрождение: каждые 3 часа"
     )
     m = types.InlineKeyboardMarkup()
     m.add(types.InlineKeyboardButton("⚔️ Атаковать (10⚡)", callback_data="world_boss_hit"))
@@ -1765,6 +2021,7 @@ def world_boss_hit(c):
     if is_crit: dmg = int(dmg * 1.5)
     world_boss["hp"] = max(0, world_boss["hp"] - dmg)
     world_boss["damage"][p["uid"]] = world_boss["damage"].get(p["uid"], 0) + dmg
+
     exp_gain = 50
     p["exp"] += exp_gain
     lvl_up = False
@@ -1775,16 +2032,19 @@ def world_boss_hit(c):
         p["max_hp"] += 20
         p["hp"] = p["max_hp"]
         lvl_up = True
+
     secret_msg = ""
     if random.randint(1, 100) <= 1:
-        secret_key = random.choice(["demon_mace", "dragon_katana", "god_flesh", "eternity_ring", "demon_crown"])
+        secret_key = random.choice(SECRET_ITEMS)
         inv = get_inv(p)
         inv.append(secret_key)
         set_inv(p, inv)
-        name = WEAPONS.get(secret_key, {}).get("name") or ARMORS.get(secret_key, {}).get("name") or ACCESSORIES.get(secret_key, {}).get("name", secret_key)
+        name = item_name(secret_key)
         secret_msg = f"\n🎁 СЕКРЕТНЫЙ ДРОП: {name}!"
-    if random.randint(1, 100) <= 40:
-        p["hp"] -= 500
+
+    # 20% шанс получить удар
+    if random.randint(1, 100) <= 20:
+        p["hp"] -= 750
         if p["hp"] <= 0:
             p["hp"] = 0
             p["death_time"] = time.time()
@@ -1792,17 +2052,25 @@ def world_boss_hit(c):
             bot.answer_callback_query(c.id, "💀 Ты умер!")
             return
     save_player(p)
+
     msg = f"⚔️ {dmg} урона! +{exp_gain} опыта{secret_msg}"
     if lvl_up: msg += f"\n⭐ Уровень {p['level']}!"
+
     if world_boss["hp"] <= 0:
         world_boss["last_spawn"] = time.time()
-        # Награды за победу
+        # Награды
         p["silver"] += 50000
         p["void_shard"] = (p.get("void_shard", 0) or 0) + 5
         if random.randint(1, 100) <= 10:
             p["void_heart"] = (p.get("void_heart", 0) or 0) + 1
+        # 3% шанс редкого сундука
+        chest_msg = ""
+        if random.randint(1, 100) <= 3:
+            p["chest_rare"] = (p.get("chest_rare", 0) or 0) + 1
+            chest_msg = "\n💎 РЕДКИЙ СУНДУК выпал!"
         save_player(p)
-        bot.send_message(c.message.chat.id, "🎉 МИРОВОЙ БОСС ПОБЕЖДЁН! Ты получил +50к серебра, +5 💠!")
+        bot.send_message(c.message.chat.id, f"🎉 МИРОВОЙ БОСС ПОБЕЖДЁН! +50к серебра, +5 💠!{chest_msg}")
+
     bot.answer_callback_query(c.id, msg[:200])
     world_boss_menu(c)
 
