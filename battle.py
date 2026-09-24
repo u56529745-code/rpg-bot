@@ -39,16 +39,19 @@ def calc_player_stats(p):
     a = ARMORS.get(p.get("armor", "none"), ARMORS["none"])
     acc = ACCESSORIES.get(p.get("accessory", "none"), ACCESSORIES["none"])
 
+    # Ловкость с учётом +X% agility
+    agi_bonus_pct = get_buff_value(p, None, "agi")
+    real_agi = p.get("agility", 0) * (1 + agi_bonus_pct / 100)
+
     dmg = w["dmg"] + p.get("strength", 0) * 2 + acc["bonus"]
     defense = a["def"] + p.get("vitality", 0) * 1
-    crit = 5 + p.get("agility", 0)
+    # КРИТ: базовый 5 + 0.5% за очко ловкости (НЕРФ)
+    crit = 5 + real_agi // 2
 
     dmg += dmg * get_buff_value(p, None, "dmg") / 100
     defense += defense * get_buff_value(p, None, "def") / 100
     crit += get_buff_value(p, None, "crit")
     max_hp_bonus = get_buff_value(p, None, "hp")
-    agi_bonus = get_buff_value(p, None, "agi")
-    crit += agi_bonus
 
     return int(dmg), int(defense), int(crit), int(max_hp_bonus)
 
@@ -182,7 +185,12 @@ def player_turn(p, mob, turn_number=1):
     pet_dmg, pet_strike = get_pet_dmg(p, turn_number)
     dmg += pet_dmg
 
-    dodge = random.randint(1, 100) <= 10
+    # Уклонение моба: 20% обычные, 15% боссы
+    if mob.get("boss"):
+        dodge_chance = 15
+    else:
+        dodge_chance = 20
+    dodge = random.randint(1, 100) <= dodge_chance
     if dodge:
         return 0, is_crit, True, 0, False, "", False
 
@@ -225,7 +233,10 @@ def mob_turn(p, mob):
     if absorb > 0 and random.randint(1, 100) <= absorb:
         final = int(final * 0.5)
 
-    dodge = random.randint(1, 100) <= 5 + p.get("agility", 0)
+    # Уклонение игрока: max 50% (НЕРФ)
+    agi = p.get("agility", 0)
+    dodge_chance = min(5 + agi // 2, 50)
+    dodge = random.randint(1, 100) <= dodge_chance
     if dodge:
         return 0, True
     p["hp"] -= final
