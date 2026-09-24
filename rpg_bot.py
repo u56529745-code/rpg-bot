@@ -27,14 +27,6 @@ world_boss = {"hp": 1500000, "max_hp": 1500000, "last_spawn": 0, "damage": {}}
 
 awaiting_name = {}
 
-PET_TYPES = {
-    "wolf":    {"name": "🐺 Волк",           "dmg": 50,   "evo": "🌑 Теневой волк",         "evo_dmg": 150},
-    "dragon":  {"name": "🐉 Дракон",         "dmg": 150,  "evo": "🐲 Небесный дракон",      "evo_dmg": 400},
-    "phoenix": {"name": "🔥 Феникс",         "dmg": 300,  "evo": "🌋 Алый феникс",          "evo_dmg": 750},
-    "unicorn": {"name": "🦄 Единорог",       "dmg": 500,  "evo": "🌸 Единорог-хранитель",   "evo_dmg": 1200},
-    "demon":   {"name": "👹 Демон",          "dmg": 1000, "evo": "🩸 Демон крови",          "evo_dmg": 2500},
-}
-
 FEED_HERB = 10
 FEED_MEAT = 30
 SATIETY_PER_LEVEL = 100
@@ -42,7 +34,6 @@ EVO_LEVEL = 10
 
 LINE = "━━━━━━━━━━━━━━━━━━"
 
-# ============ УТИЛИТЫ ============
 def safe_name(name):
     return str(name).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 
@@ -140,7 +131,6 @@ def check_dead(c, p):
         return True
     return False
 
-# ============ СОБЫТИЯ ============
 def get_current_event():
     now = time.localtime()
     wd = now.tm_wday
@@ -156,7 +146,6 @@ def update_event_flag():
     _, _, _, bm = get_current_event()
     battle_module.BLOOD_MOON = bm
 
-# ============ МЕНЮ ============
 def main_menu():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(
@@ -203,7 +192,6 @@ def menu_text(p):
         f"🔑 Ключей: {p['keys']}"
     )
 
-# ============ ИМЯ ============
 def ask_name(uid, chat_id, reason="new"):
     awaiting_name[uid] = reason
     if reason == "new":
@@ -404,7 +392,6 @@ def upgrade(c):
     bot.answer_callback_query(c.id, "✅ Улучшено!")
     stats(c)
 
-# ============ БАШНЯ ============
 @bot.callback_query_handler(func=lambda c: c.data == "tower")
 def tower(c):
     p = get_player(c.from_user.id)
@@ -620,8 +607,7 @@ def use_key(c):
     save_player(p)
     bot.answer_callback_query(c.id, f"🔑 Этаж {p['floor']} открыт!")
     tower(c)
-    
-# ============ ШАХТА ============
+
 @bot.callback_query_handler(func=lambda c: c.data == "mine")
 def mine(c):
     p = get_player(c.from_user.id)
@@ -725,7 +711,6 @@ def dig(c):
     except: pass
     bot.answer_callback_query(c.id)
 
-# ============ АВТО-ШАХТА ============
 def process_auto_mine(p):
     if not p.get("auto_mine_active"): return
     now = time.time()
@@ -870,7 +855,6 @@ def auto_mine_collect(c):
     bot.answer_callback_query(c.id, f"💰 Забрано: {total} шт.")
     auto_mine_menu(c)
 
-# ============ ИНВЕНТАРЬ ============
 INV_PAGE_SIZE = 7
 
 @bot.callback_query_handler(func=lambda c: c.data == "inv")
@@ -1061,7 +1045,6 @@ def equip_item(c):
 
     p[t] = key
 
-    # Пересчёт max_hp от брони (если это броня)
     if t == "armor":
         old_armor_hp = 0
         if old in ARMORS:
@@ -1387,9 +1370,6 @@ def handbook_show(c):
     parts = c.data.split("_")
     cat = parts[1]
     page = int(parts[2])
-    p = get_player(c.from_user.id)
-    if require_name(c, p):
-        return
 
     items = []
 
@@ -1399,7 +1379,7 @@ def handbook_show(c):
             buff = ""
             if v.get("buff") and v["buff"] in BUFFS:
                 buff = f" | {BUFFS[v['buff']]['name']}"
-            items.append(f"{v['name']} [{v['tier']}]\n  ⚔️{dmg} ур.{v['level']}{buff}" if False else f"{v['name']} [{v['tier']}]\n  ⚔️ {v['dmg']} • ур.{v['level']}{buff}")
+            items.append(f"{v['name']} [{v['tier']}]\n  ⚔️ {v['dmg']} • ур.{v['level']}{buff}")
     elif cat == "armors":
         for k, v in ARMORS.items():
             items.append(f"{v['name']} [{v['tier']}]\n  🛡 {v['def']} • ур.{v['level']}")
@@ -1512,7 +1492,6 @@ def open_chest(c):
     result_lines = [f"📦 *{cfg['name']}*\n{LINE}\n"]
     got_something = False
 
-    # Секретный предмет
     if random.randint(1, 100) <= cfg["secret_chance"]:
         secret_key = random.choice(SECRET_ITEMS)
         inv = get_inv(p)
@@ -1522,7 +1501,6 @@ def open_chest(c):
         result_lines.append(f"🎁 СЕКРЕТНЫЙ: *{name}*!")
         got_something = True
 
-    # Питомец
     if random.randint(1, 100) <= cfg["pet_chance"]:
         pet_key = random.choice(PET_POOL)
         pets = get_pets(p)
@@ -1532,7 +1510,6 @@ def open_chest(c):
         result_lines.append(f"🐾 ПИТОМЕЦ: *{pt.get('name', pet_key)}*!")
         got_something = True
 
-    # Ресурсы
     res_cfg = CHEST_RESOURCES[chest_type]
     ore_key = random.choice(res_cfg["ore"])
     ore_amt = random.randint(res_cfg["count_min"], res_cfg["count_max"])
@@ -1547,7 +1524,6 @@ def open_chest(c):
     p["void_shard"] = (p.get("void_shard", 0) or 0) + shard_amt
     result_lines.append(f"💠 Осколок бездны ×{shard_amt}")
 
-    # Серебро
     silver_amt = cfg["silver"]
     p["silver"] += silver_amt
     result_lines.append(f"💰 Серебро +{silver_amt:,}")
@@ -1562,7 +1538,7 @@ def open_chest(c):
         bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=m, parse_mode="Markdown")
     except:
         bot.send_message(c.message.chat.id, text, reply_markup=m, parse_mode="Markdown")
-        
+
 # ============ ПИТОМЦЫ ============
 @bot.callback_query_handler(func=lambda c: c.data == "pets")
 def pets_menu(c):
@@ -1848,11 +1824,9 @@ def clan_boss_hit(c):
     clan_msg = ""
     if clan_boss["hp"] <= 0:
         clan_boss["last_death"] = time.time()
-        # Шанс на сундук 5%
         if random.randint(1, 100) <= 5:
             p["chest_common"] = (p.get("chest_common", 0) or 0) + 1
             clan_msg = "\n🎁 Выпал ОБЫЧНЫЙ СУНДУК!"
-        # Ресурсы
         for _ in range(10):
             ore = random.choice(list(ORES.keys()))
             p[ore] = (p.get(ore, 0) or 0) + 1
@@ -2042,7 +2016,6 @@ def world_boss_hit(c):
         name = item_name(secret_key)
         secret_msg = f"\n🎁 СЕКРЕТНЫЙ ДРОП: {name}!"
 
-    # 20% шанс получить удар
     if random.randint(1, 100) <= 20:
         p["hp"] -= 750
         if p["hp"] <= 0:
@@ -2058,12 +2031,10 @@ def world_boss_hit(c):
 
     if world_boss["hp"] <= 0:
         world_boss["last_spawn"] = time.time()
-        # Награды
         p["silver"] += 50000
         p["void_shard"] = (p.get("void_shard", 0) or 0) + 5
         if random.randint(1, 100) <= 10:
             p["void_heart"] = (p.get("void_heart", 0) or 0) + 1
-        # 3% шанс редкого сундука
         chest_msg = ""
         if random.randint(1, 100) <= 3:
             p["chest_rare"] = (p.get("chest_rare", 0) or 0) + 1
