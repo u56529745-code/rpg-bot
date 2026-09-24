@@ -39,6 +39,15 @@ def get_inventory(p):
 def set_inventory(p, items):
     p["inventory_items"] = json.dumps(items)
 
+def check_legendary_chest(p, prof):
+    """Проверяет 100 лвл профессии и выдаёт легендарный сундук (1 раз за профессию)."""
+    flag_key = f"legend_chest_{prof}"
+    if p.get(flag_key, 0) == 0 and p.get(f"prof_{prof}", 1) >= 100:
+        p[flag_key] = 1
+        p["chest_legend"] = (p.get("chest_legend", 0) or 0) + 1
+        return True
+    return False
+
 def can_craft(p, recipe_key):
     r = RECIPES[recipe_key]
     prof = r["prof"]
@@ -95,7 +104,10 @@ def do_craft(p, recipe_key):
         new_level = prof_level_from_exp(p[f"exp_{prof}"])
         if new_level > p[f"prof_{prof}"]:
             p[f"prof_{prof}"] = new_level
-        return True, f"🎰 КРИТ! ×5 {r['name']}!\n📈 +{exp_gain}"
+        legend_msg = ""
+        if check_legendary_chest(p, prof):
+            legend_msg = "\n👑 ЛЕГЕНДАРНЫЙ СУНДУК за 100 уровень!"
+        return True, f"🎰 КРИТ! ×5 {r['name']}!\n📈 +{exp_gain}{legend_msg}"
     elif roll <= 10:
         # ПРОВАЛ
         return False, f"❌ Провал! Ресурсы сгорели."
@@ -112,9 +124,14 @@ def do_craft(p, recipe_key):
         if new_level > p[f"prof_{prof}"]:
             p[f"prof_{prof}"] = new_level
             level_up = True
+
+        legend_msg = ""
+        if check_legendary_chest(p, prof):
+            legend_msg = "\n👑 ЛЕГЕНДАРНЫЙ СУНДУК за 100 уровень!"
+
         if level_up:
-            return True, f"✅ {r['name']}!\n📈 +{exp_gain}\n🎉 {PROFESSIONS[prof]} → ур.{new_level}!"
-        return True, f"✅ {r['name']}!\n📈 +{exp_gain}"
+            return True, f"✅ {r['name']}!\n📈 +{exp_gain}\n🎉 {PROFESSIONS[prof]} → ур.{new_level}!{legend_msg}"
+        return True, f"✅ {r['name']}!\n📈 +{exp_gain}{legend_msg}"
 
 def do_craft_void(p, recipe_key):
     ok, msg = can_craft_void(p, recipe_key)
