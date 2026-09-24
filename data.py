@@ -148,16 +148,16 @@ WEAPONS = {
     "eternal_hoe": {"name": "🌾 Мотыга вечной жатвы", "dmg": 5800, "level": 85, "tier": "SSS+", "buff": "exp15"},
     "legend": {"name": "⚔️ Легендарный клинок", "dmg": 7000, "level": 100, "tier": "SSS+"},
     # СЕКРЕТНЫЕ
-    "demon_mace": {"name": "🔨 Булава кровавого демона", "dmg": 35000, "level": 0, "tier": "SSS+", "buff": "crit25"},
-    "dragon_katana": {"name": "🗡 Катана дракона", "dmg": 38000, "level": 0, "tier": "SSS+", "buff": "dmg25"},
-    "blood_spear": {"name": "🩸 Кровавое копьё", "dmg": 36000, "level": 0, "tier": "SSS+", "buff": "heal5_20"},
+    "demon_mace": {"name": "🔨 Булава кровавого демона", "dmg": 35000, "level": 0, "tier": "SSS+", "buff": "crit25", "secret": True},
+    "dragon_katana": {"name": "🗡 Катана дракона", "dmg": 38000, "level": 0, "tier": "SSS+", "buff": "dmg25", "secret": True},
+    "blood_spear": {"name": "🩸 Кровавое копьё", "dmg": 36000, "level": 0, "tier": "SSS+", "buff": "heal5_20", "secret": True},
     # БЕЗДНА
     "void_blade": {"name": "⚔️ Клинок бездны", "dmg": 40000, "level": 0, "tier": "SSS+", "buff": "agi25", "void": True},
 }
 
 WEAPON_TIER = {k: v.get("tier", "E") for k, v in WEAPONS.items()}
 
-# ============ БРОНЯ (С ФИКСОМ `none`) ============
+# ============ БРОНЯ ============
 ARMORS = {
     "none": {"name": "🚫 Без брони", "def": 0, "level": 0, "tier": "E"},
     "leather": {"name": "🧥 Кожаная", "def": 3, "level": 1, "tier": "E"},
@@ -179,15 +179,16 @@ ARMORS = {
     "sky_smith": {"name": "☁️ Доспехи небесного кузнеца", "def": 980, "level": 80, "tier": "SSS+"},
     "dead_forest": {"name": "💀 Доспехи мёртвого леса", "def": 1250, "level": 90, "tier": "SSS+"},
     "mirror_knight": {"name": "🪞 Броня зеркального рыцаря", "def": 1600, "level": 100, "tier": "SSS+"},
-    # СЕКРЕТНАЯ
-    "god_flesh": {"name": "🩸 Броня из плоти бога", "def": 4000, "level": 0, "tier": "SSS+", "buff": "hp50_def30_heal10"},
+    # СЕКРЕТНЫЕ
+    "god_flesh": {"name": "🩸 Броня из плоти бога", "def": 4000, "level": 0, "tier": "SSS+", "buff": "hp50_def30_heal10", "secret": True},
+    "black_hoodie": {"name": "🖤 Чёрная кофта", "def": 4400, "level": 0, "tier": "SSS+", "buff": "hp60_agi20_crit15", "secret": True},
     # БЕЗДНА
     "void_armor": {"name": "⚫ Броня бездны", "def": 4400, "level": 0, "tier": "SSS+", "buff": "hp60_def40_absorb20", "void": True},
 }
 
 ARMOR_TIER = {k: v.get("tier", "E") for k, v in ARMORS.items()}
 
-# ============ БИЖУТЕРИЯ (С ФИКСОМ `none`) ============
+# ============ БИЖУТЕРИЯ ============
 ACCESSORIES = {
     "none": {"name": "🚫 Нет", "bonus": 0, "level": 0, "tier": "E"},
     "ring_copper": {"name": "💍 Медное кольцо", "bonus": 5, "level": 1, "tier": "E"},
@@ -210,8 +211,9 @@ ACCESSORIES = {
     "night_flower_pendant": {"name": "🌸 Кулон цветка ночи", "bonus": 2400, "level": 90, "tier": "SSS+"},
     "forgotten_god": {"name": "🏛 Медальон забытого бога", "bonus": 3200, "level": 100, "tier": "SSS+"},
     # СЕКРЕТНЫЕ
-    "eternity_ring": {"name": "💍 Кольцо вечности", "bonus": 6000, "level": 0, "tier": "SSS+", "buff": "exp25"},
-    "demon_crown": {"name": "👑 Корона демона", "bonus": 7000, "level": 0, "tier": "SSS+", "buff": "dmg50_agi15"},
+    "eternity_ring": {"name": "💍 Кольцо вечности", "bonus": 6000, "level": 0, "tier": "SSS+", "buff": "exp25", "secret": True},
+    "demon_crown": {"name": "👑 Корона демона", "bonus": 7000, "level": 0, "tier": "SSS+", "buff": "dmg50_agi15", "secret": True},
+    "fool_prayer": {"name": "🃏 Мольба шута", "bonus": 6500, "level": 0, "tier": "SSS+", "buff": "agi20", "secret": True},
     # БЕЗДНА
     "void_amulet": {"name": "📿 Амулет бездны", "bonus": 6500, "level": 0, "tier": "SSS+", "buff": "silver25", "void": True},
 }
@@ -506,12 +508,14 @@ BUFFS = {
     "hp20": {"name": "+20% HP", "hp": 20},
     "agi10": {"name": "+10% ловкость", "agi": 10},
     "agi15": {"name": "+15% ловкость", "agi": 15},
+    "agi20": {"name": "+20% ловкость", "agi": 20},
     "exp10": {"name": "+10% опыт", "exp": 10},
     "exp15": {"name": "+15% опыт", "exp": 15},
     "silver10": {"name": "+10% серебро", "silver": 10},
     "silver15": {"name": "+15% серебро", "silver": 15},
     "heal5_20": {"name": "5% шанс отхила 20% урона", "heal": 5, "heal_pct": 20},
     "poison15": {"name": "15% шанс яда", "poison": 15},
+    "hp60_agi20_crit15": {"name": "+60% HP, +20% ловк, +15% крит", "hp": 60, "agi": 20, "crit": 15},
 }
 
 # ============ СУНДУКИ ============
@@ -546,6 +550,8 @@ SECRET_ITEMS = [
     "god_flesh",
     "eternity_ring",
     "demon_crown",
+    "fool_prayer",
+    "black_hoodie",
 ]
 
 PET_POOL = ["wolf", "dragon", "phoenix", "unicorn", "demon"]
