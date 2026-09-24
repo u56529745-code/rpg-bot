@@ -1,4 +1,5 @@
 import os
+import json
 import psycopg2
 from data import prof_exp_needed, total_prof_exp
 
@@ -28,7 +29,7 @@ FIELDS = (
      "level", "exp", "hp", "max_hp", "silver", "floor",
      "mob_kill", "keys", "strength", "agility", "vitality", "energy_flow",
      "stat_points", "death_time",
-     "weapon", "armor", "accessory",
+     "weapon", "weapon_upgrade", "armor", "accessory",
      "prof_smith", "prof_armorer", "prof_jeweler", "prof_alchemist", "prof_miner",
      "exp_smith", "exp_armorer", "exp_jeweler", "exp_alchemist", "exp_miner",
      "energy", "max_energy", "last_energy_time",
@@ -69,8 +70,8 @@ def _build_create_sql():
         "strength INTEGER DEFAULT 0", "agility INTEGER DEFAULT 0",
         "vitality INTEGER DEFAULT 0", "energy_flow INTEGER DEFAULT 0",
         "stat_points INTEGER DEFAULT 0", "death_time DOUBLE PRECISION DEFAULT 0",
-        "weapon TEXT DEFAULT 'fists'", "armor TEXT DEFAULT 'none'",
-        "accessory TEXT DEFAULT 'none'",
+        "weapon TEXT DEFAULT 'fists'", "weapon_upgrade INTEGER DEFAULT 0",
+        "armor TEXT DEFAULT 'none'", "accessory TEXT DEFAULT 'none'",
         "prof_smith INTEGER DEFAULT 1", "prof_armorer INTEGER DEFAULT 1",
         "prof_jeweler INTEGER DEFAULT 1", "prof_alchemist INTEGER DEFAULT 1",
         "prof_miner INTEGER DEFAULT 1",
@@ -122,6 +123,7 @@ def init_db():
         ("legend_chest_jeweler", "INTEGER DEFAULT 0"),
         ("legend_chest_alchemist", "INTEGER DEFAULT 0"),
         ("legend_chest_miner", "INTEGER DEFAULT 0"),
+        ("weapon_upgrade", "INTEGER DEFAULT 0"),
         ("prof_miner", "INTEGER DEFAULT 1"),
         ("exp_miner", "INTEGER DEFAULT 0"),
         ("energy_flow", "INTEGER DEFAULT 0"),
@@ -150,6 +152,25 @@ def init_db():
     except:
         conn.rollback()
 
+    # Миграция: inventory_items из строк в словари
+    try:
+        c.execute("SELECT uid, inventory_items FROM players")
+        rows = c.fetchall()
+        for uid, inv_str in rows:
+            try:
+                items = json.loads(inv_str or "[]")
+                if not items:
+                    continue
+                if isinstance(items[0], str):
+                    new_items = [{"key": k, "upgrade": 0} for k in items]
+                    c.execute("UPDATE players SET inventory_items=%s WHERE uid=%s",
+                              (json.dumps(new_items), uid))
+                    conn.commit()
+            except:
+                continue
+    except Exception:
+        conn.rollback()
+
     conn.commit()
     conn.close()
 
@@ -174,7 +195,7 @@ def get_player(uid, name="Игрок"):
         "silver": 150, "floor": 1, "mob_kill": 0, "keys": 0,
         "strength": 0, "agility": 0, "vitality": 0, "energy_flow": 0,
         "stat_points": 0, "death_time": 0,
-        "weapon": "fists", "armor": "none", "accessory": "none",
+        "weapon": "fists", "weapon_upgrade": 0, "armor": "none", "accessory": "none",
         "prof_smith": 1, "prof_armorer": 1, "prof_jeweler": 1,
         "prof_alchemist": 1, "prof_miner": 1,
         "exp_smith": 0, "exp_armorer": 0, "exp_jeweler": 0,
