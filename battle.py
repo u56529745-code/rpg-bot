@@ -1,5 +1,6 @@
 import random
 import time
+import json
 from data import (
     WEAPONS, ARMORS, ACCESSORIES, MOB_NAMES, MYSTIC_NAMES, BOSS_NAMES,
     HERBS, ORES, GEMS, MOB_LOOT, MINER_BONUS, BUFFS,
@@ -13,6 +14,7 @@ DEATH_TIME = 60
 BLOOD_MOON = False
 
 def get_buff_value(p, buff_key, stat):
+    """Считает сумму баффа по статам."""
     total = 0
     for slot in ("weapon", "armor", "accessory"):
         key = p.get(slot, "none")
@@ -23,6 +25,13 @@ def get_buff_value(p, buff_key, stat):
         if buff_name and buff_name in BUFFS:
             total += BUFFS[buff_name].get(stat, 0)
     return total
+
+def get_armor_hp_bonus(p):
+    """Бонус HP от брони (×3 от def брони)."""
+    armor_key = p.get("armor", "none")
+    if armor_key in ARMORS:
+        return ARMORS[armor_key].get("def", 0) * 3
+    return 0
 
 def calc_player_stats(p):
     w = WEAPONS.get(p["weapon"], WEAPONS["fists"])
@@ -109,20 +118,15 @@ def make_mob(floor, is_boss=False):
             "boss": False, "mystic": False, "elite": False, "golden": False}
 
 def get_pet_dmg(p, turn_number):
-    """
-    Возвращает (dmg, is_pet_strike) — урон питомца.
-    - is_pet_strike=True раз в 3 хода (доп. удар)
-    """
+    """Возвращает (dmg, is_pet_strike)."""
     try:
-        pets = __import__("json").loads(p.get("pet_data", "[]") or "[]")
+        pets = json.loads(p.get("pet_data", "[]") or "[]")
     except:
         pets = []
     if not pets:
         return 0, False
-    # Берём первого питомца
     pet = pets[0]
     base_dmg = pet.get("dmg", 0)
-    # Базовый бонус к удару
     bonus = base_dmg // 2
     extra = 0
     is_strike = False
@@ -131,28 +135,87 @@ def get_pet_dmg(p, turn_number):
         is_strike = True
     return bonus + extra, is_strike
 
+def get_weapon_heal(p, dmg):
+    """Возвращает (heal_amount, message) если сработал хил от оружия."""
+    for slot in ("weapon", "armor", "accessory"):
+        key = p.get(slot, "none")
+        item = WEAPONS.get(key) or ARMORS.get(key) or ACCESSORIES.get(key)
+        if not item:
+            continue
+        buff_name = item.get("buff")
+        if buff_name and buff_name in BUFFS:
+            buff = BUFFS[buff_name]
+            if "heal" in buff and "heal_pct" in buff:
+                if random.randint(1, 100) <= buff["heal"]:
+                    heal = int(dmg * buff["heal_pct"] / 100)
+                    return heal, f"🩸 Хил +{heal}"
+    return 0, ""
+
+def get_weapon_poison(p):
+    """Возвращает шанс яда с оружия (в %)."""
+    for slot in ("weapon", "armor", "accessory"):
+        key = p.get(slot, "none")
+        item = WEAPONS.get(key) or ARMORS.get(key) or ACCESSORIES.get(key)
+        if not item:
+            continue
+        buff_name = item.get("buff")
+        if buff_name and buff_name in BUFFS:
+            buff = BUFFS[buff_name]
+            if "poison" in buff:
+                return buff["poison"]
+    return 0
+
 def player_turn(p, mob, turn_number=1):
+    """Ход игрока. Возвращает (dmg, is_crit, dodged, pet_dmg, pet_strike, heal_msg, poison_applied)"""
     dmg, defense, crit, _ = calc_player_stats(p)
     is_crit = random.randint(1, 100) <= crit
     if is_crit:
         dmg = int(dmg * 1.5)
 
-    # Питомец
     pet_dmg, pet_strike = get_pet_dmg(p, turn_number)
     dmg += pet_dmg
 
     dodge = random.randint(1, 100) <= 10
     if dodge:
-        return 0, is_crit, True, 0, False
+        return 0, is_crit, True, 0, False, "", False
+
     mob["hp"] -= dmg
-    return dmg, is_crit, False, pet_dmg, pet_strike
+
+    # Хил от оружия
+    heal_amt, heal_msg = get_weapon_heal(p, dmg)
+    if heal_amt > 0:
+        p["hp"] = min(p["max_hp"], p["hp"] + heal_amt)
+
+    # Яд (накладывается, если ещё нет активного)
+    poison_applied = False
+    poison_chance = get_weapon_poison(p)
+    if poison_chance > 0:
+        # Проверяем, есть ли уже активный яд в бою
+        if mob.get("poison_turns", 0) <= 0:
+            if random.randint(1, 100) <= poison_chance:
+                poison_applied = True
+
+    return dmg, is_crit, False, pet_dmg, pet_strike, heal_msg, poison_applied
+
+def apply_poison(mob, base_dmg):
+    """Накладывает яд на 3 хода, 10% от урона."""
+    mob["poison_dmg"] = int(base_dmg * 0.10)
+    mob["poison_turns"] = 3
+
+def tick_poison(mob):
+    """Тик яда. Возвращает нанесённый урон."""
+    if mob.get("poison_turns", 0) > 0:
+        dmg = mob.get("poison_dmg", 0)
+        mob["hp"] -= dmg
+        mob["poison_turns"] -= 1
+        return dmg
+    return 0
 
 def mob_turn(p, mob):
     dmg, defense, crit, _ = calc_player_stats(p)
     raw = mob["dmg"]
     final = max(1, raw - defense // 2)
 
-    # Кровавая луна — ×2 урон
     if BLOOD_MOON:
         final = int(final * 2)
 
@@ -220,10 +283,11 @@ def roll_loot(floor=1):
     return pool[idx]
 
 def roll_meat():
-    """10% шанс на мясо с моба."""
     return random.randint(1, 100) <= 10
 
-def battle_text(p, mob, player_dmg, is_crit, mob_dmg, dodged_mob, dodged_player, pet_dmg=0, pet_strike=False):
+def battle_text(p, mob, player_dmg, is_crit, mob_dmg, dodged_mob, dodged_player,
+                pet_dmg=0, pet_strike=False, heal_msg="", poison_applied=False,
+                poison_tick=0):
     lines = []
     if dodged_player:
         lines.append(f"💨 {mob['name']} уклонился!")
@@ -231,11 +295,21 @@ def battle_text(p, mob, player_dmg, is_crit, mob_dmg, dodged_mob, dodged_player,
         lines.append(f"💥 КРИТ! Ты нанёс {player_dmg} урона")
     else:
         lines.append(f"⚔️ Ты нанёс {player_dmg} урона")
+
     if pet_dmg > 0:
         if pet_strike:
             lines.append(f"🐾 Питомец атаковал! +{pet_dmg} урона")
         else:
             lines.append(f"🐾 Питомец помог: +{pet_dmg}")
+
+    if heal_msg:
+        lines.append(heal_msg)
+
+    if poison_applied:
+        lines.append(f"🧪 Ты отравил {mob['name']}! (10% урона, 3 хода)")
+
+    if poison_tick > 0:
+        lines.append(f"🧪 Яд нанёс {poison_tick} урона")
 
     if mob["hp"] <= 0:
         lines.append(f"💀 {mob['name']} побеждён!")
