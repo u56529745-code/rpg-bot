@@ -6,6 +6,7 @@ from data import (
     HERBS, ORES, GEMS, MOB_LOOT, MINER_BONUS, BUFFS,
     ORE_TIER, GEM_TIER, ORE_EXP, GEM_EXP,
     roll_amount, ore_chances, gem_chances, pick_weighted,
+    PET_TYPES,
 )
 
 DEATH_TIME = 60
@@ -34,13 +35,13 @@ def get_armor_hp_bonus(p):
     return 0
 
 def calc_player_stats(p):
-    w = WEAPONS.get(p["weapon"], WEAPONS["fists"])
-    a = ARMORS.get(p["armor"], ARMORS["none"])
-    acc = ACCESSORIES.get(p["accessory"], ACCESSORIES["none"])
+    w = WEAPONS.get(p.get("weapon", "fists"), WEAPONS["fists"])
+    a = ARMORS.get(p.get("armor", "none"), ARMORS["none"])
+    acc = ACCESSORIES.get(p.get("accessory", "none"), ACCESSORIES["none"])
 
-    dmg = w["dmg"] + p["strength"] * 2 + acc["bonus"]
-    defense = a["def"] + p["vitality"] * 1
-    crit = 5 + p["agility"]
+    dmg = w["dmg"] + p.get("strength", 0) * 2 + acc["bonus"]
+    defense = a["def"] + p.get("vitality", 0) * 1
+    crit = 5 + p.get("agility", 0)
 
     dmg += dmg * get_buff_value(p, None, "dmg") / 100
     defense += defense * get_buff_value(p, None, "def") / 100
@@ -118,7 +119,7 @@ def make_mob(floor, is_boss=False):
             "boss": False, "mystic": False, "elite": False, "golden": False}
 
 def get_pet_dmg(p, turn_number):
-    """Возвращает (dmg, is_pet_strike)."""
+    """Возвращает (dmg, is_pet_strike). Берёт dmg из PET_TYPES по ключу и evolved."""
     try:
         pets = json.loads(p.get("pet_data", "[]") or "[]")
     except:
@@ -126,7 +127,13 @@ def get_pet_dmg(p, turn_number):
     if not pets:
         return 0, False
     pet = pets[0]
-    base_dmg = pet.get("dmg", 0)
+    key = pet.get("key", "")
+    evolved = pet.get("evolved", False)
+    pt = PET_TYPES.get(key, {})
+    if evolved:
+        base_dmg = pt.get("evo_dmg", 0)
+    else:
+        base_dmg = pt.get("dmg", 0)
     bonus = base_dmg // 2
     extra = 0
     is_strike = False
@@ -181,16 +188,13 @@ def player_turn(p, mob, turn_number=1):
 
     mob["hp"] -= dmg
 
-    # Хил от оружия
     heal_amt, heal_msg = get_weapon_heal(p, dmg)
     if heal_amt > 0:
         p["hp"] = min(p["max_hp"], p["hp"] + heal_amt)
 
-    # Яд (накладывается, если ещё нет активного)
     poison_applied = False
     poison_chance = get_weapon_poison(p)
     if poison_chance > 0:
-        # Проверяем, есть ли уже активный яд в бою
         if mob.get("poison_turns", 0) <= 0:
             if random.randint(1, 100) <= poison_chance:
                 poison_applied = True
@@ -198,12 +202,10 @@ def player_turn(p, mob, turn_number=1):
     return dmg, is_crit, False, pet_dmg, pet_strike, heal_msg, poison_applied
 
 def apply_poison(mob, base_dmg):
-    """Накладывает яд на 3 хода, 10% от урона."""
     mob["poison_dmg"] = int(base_dmg * 0.10)
     mob["poison_turns"] = 3
 
 def tick_poison(mob):
-    """Тик яда. Возвращает нанесённый урон."""
     if mob.get("poison_turns", 0) > 0:
         dmg = mob.get("poison_dmg", 0)
         mob["hp"] -= dmg
@@ -223,7 +225,7 @@ def mob_turn(p, mob):
     if absorb > 0 and random.randint(1, 100) <= absorb:
         final = int(final * 0.5)
 
-    dodge = random.randint(1, 100) <= 5 + p["agility"]
+    dodge = random.randint(1, 100) <= 5 + p.get("agility", 0)
     if dodge:
         return 0, True
     p["hp"] -= final
